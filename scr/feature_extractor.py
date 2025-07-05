@@ -82,31 +82,31 @@ class IGFE(nn.Module):
         return x # if input has shape (B, 3, 48, 144) -> output has shape (B, 512, 6, 18)
 
 
-if __name__ == "__main__":
-    input_height = 48
-    input_width = 144
-    input_channels = 3
-    batch_size = 1
+# if __name__ == "__main__":
+#     input_height = 48
+#     input_width = 144
+#     input_channels = 3
+#     batch_size = 1
 
-    dummy_input = torch.randn(batch_size, input_channels, input_height, input_width)
-    print(f"Dimensione dell'input dummy: {dummy_input.shape}")
+#     dummy_input = torch.randn(batch_size, input_channels, input_height, input_width)
+#     print(f"Dimensione dell'input dummy: {dummy_input.shape}")
 
-    igfe_model = IGFE()
-    print(f"Modello IGFE creato:\n{igfe_model}")
-    total_params = sum(p.numel() for p in igfe_model.parameters() if p.requires_grad)
-    print(f"\nNumero totale di parametri addestrabili: {total_params}")
-    size_in_mb = total_params * 4 / 1024 / 1024  # 4 bytes per param (float32)
-    print(f"Model size: {size_in_mb:.2f} MB")
+#     igfe_model = IGFE()
+#     print(f"Modello IGFE creato:\n{igfe_model}")
+#     total_params = sum(p.numel() for p in igfe_model.parameters() if p.requires_grad)
+#     print(f"\nNumero totale di parametri addestrabili: {total_params}")
+#     size_in_mb = total_params * 4 / 1024 / 1024  # 4 bytes per param (float32)
+#     print(f"Model size: {size_in_mb:.2f} MB")
     
 
-    output_features = igfe_model(dummy_input)
+#     output_features = igfe_model(dummy_input)
 
-    expected_output_shape = (batch_size, 512, 6, 18)
-    print(f"\nDimensione delle feature estratte dall'IGFE: {output_features.shape}")
-    print(f"Dimensione attesa dell'output: {expected_output_shape}")
+#     expected_output_shape = (batch_size, 512, 6, 18)
+#     print(f"\nDimensione delle feature estratte dall'IGFE: {output_features.shape}")
+#     print(f"Dimensione attesa dell'output: {expected_output_shape}")
 
-    assert output_features.shape == expected_output_shape, \
-        f"Errore: la dimensione dell'output non corrisponde a quella attesa! " \
-        f"Ottenuto: {output_features.shape}, Atteso: {expected_output_shape}"
+#     assert output_features.shape == expected_output_shape, \
+#         f"Errore: la dimensione dell'output non corrisponde a quella attesa! " \
+#         f"Ottenuto: {output_features.shape}, Atteso: {expected_output_shape}"
 
-    print("\nTest completato con successo: Le dimensioni dell'output corrispondono a quelle attese.")
+#     print("\nTest completato con successo: Le dimensioni dell'output corrispondono a quelle attese.")

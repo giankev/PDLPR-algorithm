@@ -35,10 +35,11 @@ class PositionalEncoding(nn.Module):
 class EncoderUnit(nn.Module):
     def __init__(self, in_channels: int, d_embed: int, n_heads: int):
         super().__init__()
-
-        self.cnn1 = CNNBlock(in_channels=in_channels, out_channels=d_embed, kernel_size=1, stride=1, padding=0) # NOTE: [!] se metto padding = 1 le dimensioni di x aumentano di 2 sia di height che di width
+        # NOTE: [!] se metto padding = 1 le dimensioni di x aumentano di 2 sia di height che di width
+        self.cnn1 = CNNBlock(in_channels=in_channels, out_channels=d_embed, kernel_size=1, stride=1, padding=0)
         self.attention = SelfAttention(n_heads=n_heads, d_embed=d_embed)
-        self.cnn2 = CNNBlock(in_channels=d_embed, out_channels=in_channels, kernel_size=1, stride=1, padding=0) # NOTE: [!] se metto padding = 1 le dimensioni di x aumentano
+        # NOTE: [!] se metto padding = 1 le dimensioni di x aumentano
+        self.cnn2 = CNNBlock(in_channels=d_embed, out_channels=in_channels, kernel_size=1, stride=1, padding=0) 
         self.norm = nn.LayerNorm(in_channels)  # NOTE: e se facessimo Group Norm?
 
     def forward(self, x):
@@ -108,32 +109,3 @@ class Encoder(nn.Module):
         for layer in self.layers:
             x = layer(x)
         return x
-
-
-
-batch_size = 1
-input_channels=512
-input_height=6
-input_width = 18
-dummy_input = torch.randn(batch_size, input_channels, input_height, input_width)
-
-
-expected_output_shape = (batch_size, input_channels, input_height, input_width)
-model = Encoder()
-
-output_features = model(dummy_input)
-print(f"Modello IGFE creato:\n{model}")
-total_params = sum(p.numel() for p in model.parameters() if p.requires_grad)
-print(f"\nNumero totale di parametri addestrabili: {total_params}")
-size_in_mb = total_params * 4 / 1024 / 1024  # 4 bytes per param (float32)
-print(f"Model size: {size_in_mb:.2f} MB")
-
-print(f"\nDimensione dell'output dell'Encoder Block: {output_features.shape}")
-
-print(f"Dimensione attesa dell'output: {expected_output_shape}")
-
-assert output_features.shape == expected_output_shape, \
-    f"Errore: la dimensione dell'output non corrisponde a quella attesa! " \
-    f"Ottenuto: {output_features.shape}, Atteso: {expected_output_shape}"
-
-print("\nTest completato con successo: Le dimensioni dell'output corrispondono a quelle attese.")

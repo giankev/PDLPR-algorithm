@@ -108,9 +108,6 @@ class Decoder(nn.Module):
         self.seq_len = height * width
         self.d_model = d_embed
 
-        self.cnn3 = CNNBlock(d_embed, d_embed, (2, 1), 3, 1)
-        self.cnn4 = CNNBlock(d_embed, d_embed, 1, 3, (0,1))
-
         self.pos_encoder = PositionalEncoding(d_model=self.d_model,
                                               seq_len=self.seq_len,
                                               dropout=dropout)
@@ -123,8 +120,6 @@ class Decoder(nn.Module):
         # x: (B, in_channels, H, W)
         # conv_out: (B, d_embed, a, b)
         B, C, H, W = x.shape
-        
-        conv_out = self.cnn4(self.cnn3(x))
 
         # (B, C, H, W) -> (B, C, H*W) -> (B, H*W, C)
         x = x.flatten(2).permute(0, 2, 1)

@@ -13,7 +13,8 @@ from decoder import Decoder
 # (B, 512, 1, 3)
 
 class PDLPR(nn.Module):
-    def __init__(self, d_embed: int=512, d_cross: int=3, units: int=3, n_heads: int=8, height: int = 6, width: int=18):
+    def __init__(self, d_embed: int=512, d_cross: int=3, units: int=3,
+                 n_heads: int=8, height: int = 6, width: int=18, num_classes: int=37):
         super().__init__()  
 
         self.igfe = IGFE(in_channels=12, out_channels=d_embed)
@@ -39,24 +40,34 @@ class PDLPR(nn.Module):
             dec_unit=units,
             n_heads=n_heads, 
             dropout=0.1)
+        
+        self.classifier = nn.Linear(d_embed, num_classes)
     
     def forward(self, x):
         # (B, 3, 48, 144) -> (B, 512, 6, 18)
         x = self.igfe(x)
-        print("IGFE output:", x.shape)
+        # print("IGFE output:", x.shape)
 
         # (B, 512, 6, 18) -> (B, 512, 6, 18) 
         x = self.encoder(x)
-        print("Enc output:", x.shape)
+        # print("Enc output:", x.shape)
 
         # (B, 512, 6, 18) -> (B, 512, 1, 3) 
         conv_out = self.cnn4(self.cnn3(x)) # (B, 512, 1, 3)
-        print("Conv output:", conv_out.shape)
+        # print("Conv output:", conv_out.shape)
 
         # (B, 512, 6, 18) -> (B, 512, 6, 18)
         x = self.decoder(x, conv_out)
-        print("Dec output:", x.shape)
-        return x
+        # print("Dec output: ", x.shape)
+
+        B, C, H, W = x.shape
+        # (B, 512, 6, 18) -> (B, 6, 18, 512) -> (B, 108, 512) 
+        x = x.permute(0, 2, 3, 1).reshape(B, H*W, C)
+        # (B, 108, 512)  ->  (B, 108, 37)
+        logits = self.classifier(x)
+        # print("Logits shape: ", logits.shape)
+        return logits
+
 
 
 if __name__ == "__main__":
@@ -78,12 +89,12 @@ if __name__ == "__main__":
 
     output_features = model(dummy_input)
 
-    expected_output_shape = (batch_size, 512, 6, 18)
-    print(f"\nDimensione reali dell'output: {output_features.shape}")
-    print(f"Dimensione attesa dell'output: {expected_output_shape}")
+    # expected_output_shape = (batch_size, 512, 6, 18)
+    # print(f"\nDimensione reali dell'output: {output_features.shape}")
+    # print(f"Dimensione attesa dell'output: {expected_output_shape}")
 
-    assert output_features.shape == expected_output_shape, \
-        f"Errore: la dimensione dell'output non corrisponde a quella attesa! " \
-        f"Ottenuto: {output_features.shape}, Atteso: {expected_output_shape}"
+    # assert output_features.shape == expected_output_shape, \
+    #     f"Errore: la dimensione dell'output non corrisponde a quella attesa! " \
+    #     f"Ottenuto: {output_features.shape}, Atteso: {expected_output_shape}"
 
-    print("\nTest completato con successo: Le dimensioni dell'output corrispondono a quelle attese.")
+    # print("\nTest completato con successo: Le dimensioni dell'output corrispondono a quelle attese.")

@@ -15,87 +15,167 @@ def set_seed(seed: int = 42):
     np.random.seed(seed)
     random.seed(seed)
 
+
+def character_accuracy(preds, targets):
+    correct = 0
+    total = 0
+    for p, t in zip(preds, targets):
+        correct += sum(pc == tc for pc, tc in zip(p, t))
+        total += len(t)
+    return correct / total if total > 0 else 0.0
+
+
+import os
+import torch
+import torch.nn as nn
+import torch.optim as optim
+from tqdm import tqdm
+
+
+def character_accuracy(preds, targets):
+    """Calcola la accuratezza a livello di carattere."""
+    correct = 0
+    total = 0
+    for p, t in zip(preds, targets):
+        correct += sum(pc == tc for pc, tc in zip(p, t))
+        total += len(t)
+    return correct / total if total > 0 else 0.0
+
+
+def sequence_accuracy(preds, targets):
+    """Calcola la accuratezza a livello di sequenza intera."""
+    correct = sum(p == t for p, t in zip(preds, targets))
+    return correct / len(targets)
+
 def train(train_loader,
-              model,
-              char2idx,
-              device='cuda',
-              num_epochs=10,
-              lr=1e-3,
-              load_checkpoint_path=None,
-              save_checkpoint_path=None,
-              lr_decay_factor=0.9,
-              lr_decay_epochs=20):
+          val_loader,
+          model,
+          char2idx,
+          device='cuda',
+          num_epochs=10,
+          lr=1e-3,
+          load_checkpoint_path=None,
+          save_checkpoint_path=None,
+          lr_decay_factor=0.9,
+          lr_decay_epochs=20):
 
     model = model.to(device)
     optimizer = optim.Adam(model.parameters(), lr=lr)
-    ctc_loss = nn.CTCLoss(blank=char2idx['-'], zero_infinity=True)
+    blank_idx = char2idx['-']
+    ctc_loss = nn.CTCLoss(blank=blank_idx, zero_infinity=True)
 
     start_epoch = 0
-    best_loss = float('inf')
+    best_val_loss = float('inf')
     last_decay_epoch = 0
 
-    if load_checkpoint_path is not None and os.path.isfile(load_checkpoint_path):
+    # Salvataggio delle perdite per ogni epoca
+    train_losses = []
+    val_losses = []
+
+    # Caricamento checkpoint se disponibile
+    if load_checkpoint_path and os.path.isfile(load_checkpoint_path):
         checkpoint = torch.load(load_checkpoint_path, map_location=device)
         model.load_state_dict(checkpoint['weights'])
         optimizer.load_state_dict(checkpoint['optimizer'])
         start_epoch = checkpoint.get('epoch', 0)
-        best_loss = checkpoint.get('best_loss', best_loss)
+        best_val_loss = checkpoint.get('best_loss', best_val_loss)
         last_decay_epoch = checkpoint.get('last_decay_epoch', 0)
         print(f"Checkpoint caricato da {load_checkpoint_path}, ripartendo dall'epoca {start_epoch}")
 
+    if save_checkpoint_path:
+        os.makedirs(save_checkpoint_path, exist_ok=True)
+
     for epoch in range(start_epoch, num_epochs):
         model.train()
-        total_loss = 0
-        progress_bar = tqdm(train_loader, desc=f"Epoch {epoch+1}/{num_epochs}")
+        total_train_loss = 0
+        progress_bar = tqdm(train_loader, desc=f"Epoch {epoch + 1}/{num_epochs}")
 
-        for images, label_strings in progress_bar:
+        for images, labels in progress_bar:
             images = images.to(device)
+            labels = labels.to(device)
 
-            # Encode targets
-            targets = [torch.tensor([char2idx[c] for c in label], dtype=torch.long) for label in label_strings]
-            target_lengths = torch.tensor([len(t) for t in targets], dtype=torch.long)
-            targets_concat = torch.cat(targets).to(device)
+            batch_size, seq_len = labels.shape
+            targets = labels.view(-1)
+            target_lengths = torch.full((batch_size,), seq_len, dtype=torch.long, device=device)
 
-            # Forward
             logits = model(images)  # (B, T, C)
-            log_probs = logits.log_softmax(2)
-            log_probs = log_probs.permute(1, 0, 2)  # (T, B, C)
+            log_probs = logits.log_softmax(2).permute(1, 0, 2)  # (T, B, C)
+            input_lengths = torch.full((batch_size,), log_probs.size(0), dtype=torch.long, device=device)
 
-            input_lengths = torch.full(size=(log_probs.size(1),), fill_value=log_probs.size(0), dtype=torch.long)
-
-            loss = ctc_loss(log_probs, targets_concat, input_lengths, target_lengths)
+            loss = ctc_loss(log_probs, targets, input_lengths, target_lengths)
 
             optimizer.zero_grad()
             loss.backward()
             optimizer.step()
 
-            total_loss += loss.item()
+            total_train_loss += loss.item()
             progress_bar.set_postfix(loss=loss.item())
 
-        avg_loss = total_loss / len(train_loader)
-        print(f"Epoch {epoch+1} | Loss medio: {avg_loss:.6f}")
+        avg_train_loss = total_train_loss / len(train_loader)
+        train_losses.append(avg_train_loss)
 
-        # Decay learning rate se necessario
+        # Validazione
+        model.eval()
+        total_val_loss = 0
+        all_preds, all_targets = [], []
+
+        with torch.no_grad():
+            for val_images, val_labels in val_loader:
+                val_images = val_images.to(device)
+                val_labels = val_labels.to(device)
+
+                batch_size, seq_len = val_labels.shape
+                val_targets = val_labels.view(-1)
+                val_target_lengths = torch.full((batch_size,), seq_len, dtype=torch.long, device=device)
+
+                val_logits = model(val_images)
+                val_log_probs = val_logits.log_softmax(2).permute(1, 0, 2)
+                val_input_lengths = torch.full((batch_size,), val_log_probs.size(0), dtype=torch.long, device=device)
+
+                val_loss = ctc_loss(val_log_probs, val_targets, val_input_lengths, val_target_lengths)
+                total_val_loss += val_loss.item()
+
+                # Decode greedy
+                pred_sequences = val_log_probs.permute(1, 0, 2).argmax(2)  # (B, T)
+                for pred, true_label in zip(pred_sequences, val_labels):
+                    pred = torch.unique_consecutive(pred, dim=0)
+                    pred = [p.item() for p in pred if p.item() != blank_idx]
+                    target = [t.item() for t in true_label if t.item() != blank_idx]
+                    all_preds.append(pred)
+                    all_targets.append(target)
+
+        avg_val_loss = total_val_loss / len(val_loader)
+        val_losses.append(avg_val_loss)
+
+        char_acc = character_accuracy(all_preds, all_targets)
+        seq_acc = sequence_accuracy(all_preds, all_targets)
+
+        print(f"Epoch {epoch + 1} | Train Loss: {avg_train_loss:.4f} | Val Loss: {avg_val_loss:.4f} | "
+              f"Char Acc: {char_acc:.4f} | Seq Acc: {seq_acc:.4f}")
+
+        # Decay del learning rate
         if (epoch + 1) % lr_decay_epochs == 0:
-            if avg_loss >= best_loss:
-                for param_group in optimizer.param_groups:
-                    old_lr = param_group['lr']
-                    new_lr = old_lr * lr_decay_factor
-                    param_group['lr'] = new_lr
-                print(f"Learning rate ridotto a {new_lr:.2e} all'epoca {epoch+1} (loss non migliorata)")
+            if avg_val_loss >= best_val_loss:
+                for group in optimizer.param_groups:
+                    old_lr = group['lr']
+                    group['lr'] = old_lr * lr_decay_factor
+                print(f"Learning rate ridotto a {group['lr']:.2e} (val loss non migliorata)")
                 last_decay_epoch = epoch + 1
             else:
-                best_loss = avg_loss
+                best_val_loss = avg_val_loss
 
         # Salvataggio checkpoint
-        if save_checkpoint_path is not None:
+        if save_checkpoint_path:
             checkpoint = {
                 'epoch': epoch + 1,
                 'weights': model.state_dict(),
                 'optimizer': optimizer.state_dict(),
-                'best_loss': best_loss,
+                'best_loss': best_val_loss,
                 'last_decay_epoch': last_decay_epoch
             }
-            os.makedirs(os.path.dirname(save_checkpoint_path), exist_ok=True)
-            torch.save(checkpoint, save_checkpoint_path)
-            print(f"Checkpoint salvato in {save_checkpoint_path}")
+            checkpoint_file = os.path.join(save_checkpoint_path, f"checkpoint_epoch{epoch + 1}.pt")
+            torch.save(checkpoint, checkpoint_file)
+            print(f"Checkpoint salvato in {checkpoint_file}")
+
+    print("Training completato.")
+    return model, train_losses, val_losses

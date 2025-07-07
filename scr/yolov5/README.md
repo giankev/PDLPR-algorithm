@@ -4,7 +4,7 @@ The notebook yolov5 is used for finetuning phase and test phase.
 
 ---
 
-## 📊 Dataset Overview
+## Dataset Overview
 
 We used:
 

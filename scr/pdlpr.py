@@ -63,7 +63,7 @@ class PDLPR(nn.Module):
         B, C, H, W = x.shape
         # (B, 512, 6, 18) -> (B, 6, 18, 512) -> (B, 108, 512) 
         x = x.permute(0, 2, 3, 1).reshape(B, H*W, C)
-        # (B, 108, 512)  ->  (B, 108, 37)
+        # (B, 108, 512)  ->  (B, 108, num_classes)
         logits = self.classifier(x)
         # print("Logits shape: ", logits.shape)
         return logits

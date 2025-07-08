@@ -17,22 +17,6 @@ def set_seed(seed: int = 42):
 
 
 def character_accuracy(preds, targets):
-    correct = 0
-    total = 0
-    for p, t in zip(preds, targets):
-        correct += sum(pc == tc for pc, tc in zip(p, t))
-        total += len(t)
-    return correct / total if total > 0 else 0.0
-
-
-import os
-import torch
-import torch.nn as nn
-import torch.optim as optim
-from tqdm import tqdm
-
-
-def character_accuracy(preds, targets):
     """Calcola la accuratezza a livello di carattere."""
     correct = 0
     total = 0
@@ -85,10 +69,10 @@ def train(train_loader,
     if save_checkpoint_path:
         os.makedirs(save_checkpoint_path, exist_ok=True)
 
-    for epoch in range(start_epoch, num_epochs):
+    for epoch in range(start_epoch, start_epoch + num_epochs):
         model.train()
         total_train_loss = 0
-        progress_bar = tqdm(train_loader, desc=f"Epoch {epoch + 1}/{num_epochs}")
+        progress_bar = tqdm(train_loader, desc=f"Epoch {epoch + 1}/{start_epoch + num_epochs}")
 
         for images, labels in progress_bar:
             images = images.to(device)
@@ -165,7 +149,8 @@ def train(train_loader,
                 best_val_loss = avg_val_loss
 
         # Salvataggio checkpoint
-        if save_checkpoint_path:
+        is_last_epoch = (epoch + 1 == start_epoch + num_epochs)
+        if save_checkpoint_path and ((epoch + 1) % 5 == 0 or is_last_epoch):
             checkpoint = {
                 'epoch': epoch + 1,
                 'weights': model.state_dict(),
@@ -179,3 +164,46 @@ def train(train_loader,
 
     print("Training completato.")
     return model, train_losses, val_losses
+
+
+def evaluate_model(model, data_loader, char2idx, device='cuda'):
+    """Valuta il modello su un data_loader (es. test set)."""
+    model.eval()
+    blank_idx = char2idx['-']
+    ctc_loss = nn.CTCLoss(blank=blank_idx, zero_infinity=True)
+
+    total_loss = 0
+    all_preds = []
+    all_targets = []
+
+    with torch.no_grad():
+        for images, labels in data_loader:
+            images = images.to(device)
+            labels = labels.to(device)
+
+            batch_size, seq_len = labels.shape
+            targets = labels.view(-1)
+            target_lengths = torch.full((batch_size,), seq_len, dtype=torch.long, device=device)
+
+            logits = model(images)
+            log_probs = logits.log_softmax(2).permute(1, 0, 2)
+            input_lengths = torch.full((batch_size,), log_probs.size(0), dtype=torch.long, device=device)
+
+            loss = ctc_loss(log_probs, targets, input_lengths, target_lengths)
+            total_loss += loss.item()
+
+            # Decodifica greedy
+            pred_sequences = log_probs.permute(1, 0, 2).argmax(2)
+            for pred, true_label in zip(pred_sequences, labels):
+                pred = torch.unique_consecutive(pred, dim=0)
+                pred = [p.item() for p in pred if p.item() != blank_idx]
+                target = [t.item() for t in true_label if t.item() != blank_idx]
+                all_preds.append(pred)
+                all_targets.append(target)
+
+    avg_loss = total_loss / len(data_loader)
+    char_acc = character_accuracy(all_preds, all_targets)
+    seq_acc = sequence_accuracy(all_preds, all_targets)
+
+    print(f"Evaluation | Loss: {avg_loss:.4f} | Char Acc: {char_acc:.4f} | Seq Acc: {seq_acc:.4f}")
+    return avg_loss, char_acc, seq_acc

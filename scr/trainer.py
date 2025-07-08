@@ -74,6 +74,7 @@ def train(train_loader,
         total_train_loss = 0
         progress_bar = tqdm(train_loader, desc=f"Epoch {epoch + 1}/{start_epoch + num_epochs}")
 
+        all_train_preds, all_train_targets = [], []
         for images, labels in progress_bar:
             images = images.to(device)
             labels = labels.to(device)
@@ -92,11 +93,24 @@ def train(train_loader,
             loss.backward()
             optimizer.step()
 
+            # Decode greedy per il training set
+            with torch.no_grad():
+                pred_sequences = log_probs.permute(1, 0, 2).argmax(2)  # (B, T)
+                for pred, true_label in zip(pred_sequences, labels):
+                    pred = torch.unique_consecutive(pred, dim=0)
+                    pred = [p.item() for p in pred if p.item() != blank_idx]
+                    target = [t.item() for t in true_label if t.item() != blank_idx]
+                    all_train_preds.append(pred)
+                    all_train_targets.append(target)
+
             total_train_loss += loss.item()
             progress_bar.set_postfix(loss=loss.item())
+        
 
         avg_train_loss = total_train_loss / len(train_loader)
         train_losses.append(avg_train_loss)
+        train_char_acc = character_accuracy(all_train_preds, all_train_targets)
+        train_seq_acc = sequence_accuracy(all_train_preds, all_train_targets)
 
         # Validazione
         model.eval()
@@ -134,8 +148,9 @@ def train(train_loader,
         char_acc = character_accuracy(all_preds, all_targets)
         seq_acc = sequence_accuracy(all_preds, all_targets)
 
-        print(f"Epoch {epoch + 1} | Train Loss: {avg_train_loss:.4f} | Val Loss: {avg_val_loss:.4f} | "
-              f"Char Acc: {char_acc:.4f} | Seq Acc: {seq_acc:.4f}")
+        print(f"Epoch {epoch + 1} | "
+              f"Train Loss: {avg_train_loss:.4f} | Train Char Acc: {train_char_acc:.4f} | Train Seq Acc: {train_seq_acc:.4f} | \n "
+              f"Val Loss: {avg_val_loss:.4f} | Val Char Acc: {char_acc:.4f} | Val Seq Acc: {seq_acc:.4f}")
 
         # Decay del learning rate
         if (epoch + 1) % lr_decay_epochs == 0:

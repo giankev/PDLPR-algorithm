@@ -99,8 +99,7 @@ class Decoder(nn.Module):
                  d_embed=512,
                  d_cross=3,
                  dec_unit=3,
-                 n_heads=8, 
-                 dropout=0.1):
+                 n_heads=8):
         super().__init__()
 
         self.height = height
@@ -109,8 +108,7 @@ class Decoder(nn.Module):
         self.d_model = d_embed
 
         self.pos_encoder = PositionalEncoding(d_model=self.d_model,
-                                              seq_len=self.seq_len,
-                                              dropout=dropout)
+                                              seq_len=self.seq_len)
         self.layers = nn.ModuleList([
             DecoderUnit(d_embed=d_embed, d_cross=d_cross, n_heads=n_heads)
             for _ in range(dec_unit)

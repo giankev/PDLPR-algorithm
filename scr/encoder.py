@@ -7,11 +7,10 @@ import math
 
 class PositionalEncoding(nn.Module):
 
-    def __init__(self, d_model: int, seq_len: int, dropout: float) -> None:
+    def __init__(self, d_model: int, seq_len: int) -> None:
         super().__init__()
         self.d_model = d_model
         self.seq_len = seq_len
-        self.dropout = nn.Dropout(dropout)
         # Create a matrix of shape (seq_len, d_model)
         pe = torch.zeros(seq_len, d_model)
         # Create a vector of shape (seq_len) 
@@ -29,7 +28,7 @@ class PositionalEncoding(nn.Module):
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         x = x + (self.pe[:, :x.shape[1], :]).requires_grad_(False) # (batch, seq_len, d_model)
-        return self.dropout(x)
+        return x
 
 
 class EncoderUnit(nn.Module):
@@ -78,8 +77,7 @@ class Encoder(nn.Module):
                  width = 18,
                  out_channels=1024,
                  enc_unit=3,
-                 n_heads=8, 
-                 dropout=0.1):
+                 n_heads=8):
         super().__init__()
 
         self.height = height
@@ -88,8 +86,7 @@ class Encoder(nn.Module):
         self.d_model = in_channels
 
         self.pos_encoder = PositionalEncoding(d_model=self.d_model,
-                                              seq_len=self.seq_len,
-                                              dropout=dropout)
+                                              seq_len=self.seq_len)
         self.layers = nn.ModuleList([
             EncoderUnit(in_channels, out_channels, n_heads)
             for _ in range(enc_unit)

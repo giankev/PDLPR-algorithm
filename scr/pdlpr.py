@@ -25,8 +25,7 @@ class PDLPR(nn.Module):
             width = width,
             out_channels=d_embed*2,
             enc_unit=units,
-            n_heads=n_heads, 
-            dropout=0.1)
+            n_heads=n_heads)
 
         # NOTE:  CNN BLOCK3 + CNN BLOCK4 danno un outout diverso da quello del paper   
         self.cnn3 = CNNBlock(d_embed, d_embed, kernel_size=(2, 1), stride=3, padding=1)
@@ -38,8 +37,7 @@ class PDLPR(nn.Module):
             d_embed=d_embed,
             d_cross=d_cross,
             dec_unit=units,
-            n_heads=n_heads, 
-            dropout=0.1)
+            n_heads=n_heads)
         
         self.classifier = nn.Linear(d_embed, num_classes)
     
@@ -63,7 +61,7 @@ class PDLPR(nn.Module):
         B, C, H, W = x.shape
         # (B, 512, 6, 18) -> (B, 6, 18, 512) -> (B, 108, 512) 
         x = x.permute(0, 2, 3, 1).reshape(B, H*W, C)
-        # (B, 108, 512)  ->  (B, 108, 37)
+        # (B, 108, 512)  ->  (B, 108, num_classes)
         logits = self.classifier(x)
         # print("Logits shape: ", logits.shape)
         return logits

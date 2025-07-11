@@ -1,8 +1,29 @@
-
 import numpy as np
 import random
 import cv2
 from PIL import Image, ImageFilter, ImageDraw
+from torchvision import transforms
+
+class RandomColorPad:
+    def __init__(self, pad=(10, 20, 10, 20)):
+        self.pad = pad
+
+    def __call__(self, img):
+        color = tuple(random.randint(0, 255) for _ in range(3))
+        return transforms.functional.pad(img, padding=self.pad, fill=color)
+
+class RandomVerticalStretch:
+    def __init__(self, scale_range=(0.8, 1.2), p=0.5):
+        self.scale_range = scale_range
+        self.p = p
+
+    def __call__(self, img):
+        if random.random() < self.p:
+            w, h = img.size
+            scale = random.uniform(*self.scale_range)
+            new_h = int(h * scale)
+            img = img.resize((w, new_h), Image.BILINEAR)
+        return img
 
 class RandomMotionBlur:
     def __init__(self, p=0.5, kernel_size=(3, 9)):
@@ -177,9 +198,9 @@ class MatrixEffect:
         img_np = np.array(img).astype(np.float32) / 255.0
 
         # Modifica canali per effetto "Matrix"
-        r = img_np[..., 0] * 0.1
-        g = img_np[..., 1] * 0.8
-        b = img_np[..., 2] * 0.1
+        r = img_np[..., 0] * 0.25
+        g = img_np[..., 1] * 0.6
+        b = img_np[..., 2] * 0.25
 
         img_matrix = np.stack([r, g, b], axis=-1)
 

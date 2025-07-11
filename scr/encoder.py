@@ -50,12 +50,8 @@ class EncoderUnit(nn.Module):
         x = self.cnn2(x)
         # (B, in_channels, H , W) -> (B, in_channels, H , W)
         x = x + residual
-        # (B, in_channels, H , W) -> # (B, H , W, in_channels)
-        x = x.permute(0, 2, 3, 1)
-        # (B, H , W, in_channels) -> (B, H , W, in_channels)
         x = self.norm(x) 
-        # (B, H , W, in_channels) -> (B, in_channels, H , W)
-        x = x.permute(0, 3, 1, 2)
+
         return x
 
 class Encoder(nn.Module):

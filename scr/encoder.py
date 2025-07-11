@@ -6,29 +6,16 @@ from attention import SelfAttention
 import math
 
 class PositionalEncoding(nn.Module):
-
-    def __init__(self, d_model: int, seq_len: int) -> None:
+    def __init__(self, d_model: int, seq_len: int):
         super().__init__()
-        self.d_model = d_model
-        self.seq_len = seq_len
-        # Create a matrix of shape (seq_len, d_model)
-        pe = torch.zeros(seq_len, d_model)
-        # Create a vector of shape (seq_len) 
-        position = torch.arange(0, seq_len, dtype=torch.float).unsqueeze(1) # (seq_len, 1)
-        # Create a vector of shape (d_model)
-        div_term = torch.exp(torch.arange(0, d_model, 2).float() * (-math.log(10000.0) / d_model)) # 1D tensor -> (d_model / 2)
-        # Apply sine to even indices
-        pe[:, 0::2] = torch.sin(position * div_term) # sin(position * (10000 ** (2i / d_model))
-        # Apply cosine to odd indices
-        pe[:, 1::2] = torch.cos(position * div_term) # cos(position * (10000 ** (2i / d_model))
-        # Add a batch dimension to the positional encoding
-        pe = pe.unsqueeze(0) # (1, seq_len, d_model)
-        # Register the positional encoding as a buffer
-        self.register_buffer('pe', pe)
+        self.pe = nn.Parameter(
+            torch.zeros(1, seq_len, d_model)
+        )
+        nn.init.trunc_normal_(self.pe, std=0.02)  # inizializzazione
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
-        x = x + (self.pe[:, :x.shape[1], :]).requires_grad_(False) # (batch, seq_len, d_model)
-        return x
+        # x: (B, seq_len, d_model)
+        return x + self.pe[:, :x.size(1), :]
 
 
 class EncoderUnit(nn.Module):
@@ -39,7 +26,7 @@ class EncoderUnit(nn.Module):
         self.attention = SelfAttention(n_heads=n_heads, d_embed=d_embed)
         # NOTE: [!] se metto padding = 1 le dimensioni di x aumentano
         self.cnn2 = CNNBlock(in_channels=d_embed, out_channels=in_channels, kernel_size=1, stride=1, padding=0) 
-        self.norm = nn.LayerNorm(in_channels)  # NOTE: e se facessimo Group Norm?
+        self.norm = nn.GroupNorm(num_groups=1, num_channels=in_channels)
 
     def forward(self, x):
         # x: (B, in_channels, H, W)

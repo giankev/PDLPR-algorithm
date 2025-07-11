@@ -196,16 +196,21 @@ class MatrixEffect:
             return img
 
         img_np = np.array(img).astype(np.float32) / 255.0
-
+        
         # Modifica canali per effetto "Matrix"
-        r = img_np[..., 0] * 0.25
-        g = img_np[..., 1] * 0.6
-        b = img_np[..., 2] * 0.25
+        r = img_np[..., 0] * 0.4
+        g = img_np[..., 1] * 0.65
+        b = img_np[..., 2] * 0.4
 
         img_matrix = np.stack([r, g, b], axis=-1)
+        
+        luminance = img_matrix.mean()
 
         # Intensità casuale di scurimento
         factor = random.uniform(*self.intensity)
+        if luminance < 0.25:
+            factor = max(factor, 0.8) 
+
         img_matrix = img_matrix * factor
 
         img_matrix = np.clip(img_matrix * 255, 0, 255).astype(np.uint8)

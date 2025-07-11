@@ -45,6 +45,14 @@ def train(train_loader,
 
     model = model.to(device)
     optimizer = optim.Adam(model.parameters(), lr=lr)
+    scheduler = ReduceLROnPlateau(
+    optimizer,
+    mode='min',            # minimizziamo val_loss
+    factor=0.5,            # dimezza il LR
+    patience=8,            # aspetta 8 epoche senza migliorare
+    threshold=5e-4,        # “miglioramento minimo” (0.05 %)
+    cooldown=2,            # 2 epoche di tregua dopo ogni taglio
+    verbose=True)
     blank_idx = char2idx['-']
     ctc_loss = nn.CTCLoss(blank=blank_idx, zero_infinity=True)
 
@@ -91,6 +99,7 @@ def train(train_loader,
 
             optimizer.zero_grad()
             loss.backward()
+            torch.nn.utils.clip_grad_norm_(model.parameters(), max_norm=5.0)
             optimizer.step()
 
             # Decode greedy per il training set
@@ -144,6 +153,7 @@ def train(train_loader,
 
         avg_val_loss = total_val_loss / len(val_loader)
         val_losses.append(avg_val_loss)
+        scheduler.step(avg_val_loss)
 
         char_acc = character_accuracy(all_preds, all_targets)
         seq_acc = sequence_accuracy(all_preds, all_targets)
@@ -153,6 +163,7 @@ def train(train_loader,
               f"Val Loss: {avg_val_loss:.4f} | Val Char Acc: {char_acc:.4f} | Val Seq Acc: {seq_acc:.4f}")
 
         # Decay del learning rate
+        '''
         if (epoch + 1) % lr_decay_epochs == 0:
             if avg_val_loss >= best_val_loss:
                 for group in optimizer.param_groups:
@@ -162,7 +173,7 @@ def train(train_loader,
                 last_decay_epoch = epoch + 1
             else:
                 best_val_loss = avg_val_loss
-
+        '''
         # Salvataggio checkpoint
         is_last_epoch = (epoch + 1 == start_epoch + num_epochs)
         if save_checkpoint_path and ((epoch + 1) % 5 == 0 or is_last_epoch):

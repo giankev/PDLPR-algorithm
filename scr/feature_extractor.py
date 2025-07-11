@@ -17,16 +17,16 @@ class FocusStructure(nn.Module):
         return x
 
 class CNNBlock(nn.Module):
-    def __init__(self, in_channels, out_channels, kernel_size = 3, stride = 1, padding = 1, alfa = 0.1): # NOTE: alfa=0.1 [? nel paper non c'è]
+    def __init__(self, in_channels, out_channels, kernel_size = 3, stride = 1, padding = 1, alfa = 0.15): # NOTE: alfa=0.1 [? nel paper non c'è]
         super().__init__()
         self.LReLU = nn.LeakyReLU(alfa)
         self.bn = nn.BatchNorm2d(in_channels)   # NOTE: prima era nn.BatchNorm2d(out_channels) 
         self.conv = nn.Conv2d(in_channels, out_channels, kernel_size, stride, padding)
 
     def forward(self, x:torch.Tensor) -> torch.Tensor:
-        x = self.LReLU(x)
+        x = self.conv(x)
         x = self.bn(x)
-        return self.conv(x) # NOTE: prima era self.LReLU(self.bn(self.conv(x))) [! ORDINE INVERTITO]
+        return self.LReLU(x)
 
 
 class RESBLOCK(nn.Module):

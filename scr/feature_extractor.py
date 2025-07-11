@@ -20,7 +20,7 @@ class CNNBlock(nn.Module):
     def __init__(self, in_channels, out_channels, kernel_size = 3, stride = 1, padding = 1, alfa = 0.15): # NOTE: alfa=0.1 [? nel paper non c'è]
         super().__init__()
         self.LReLU = nn.LeakyReLU(alfa)
-        self.bn = nn.BatchNorm2d(in_channels)   # NOTE: prima era nn.BatchNorm2d(out_channels) 
+        self.bn = nn.BatchNorm2d(out_channels)   # NOTE: prima era nn.BatchNorm2d(out_channels) 
         self.conv = nn.Conv2d(in_channels, out_channels, kernel_size, stride, padding)
 
     def forward(self, x:torch.Tensor) -> torch.Tensor:

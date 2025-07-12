@@ -38,7 +38,7 @@ class DecoderUnit(nn.Module):
         x = x.view((b, c, h * w)).transpose(-1, -2)
         # Masked Self-attention
         # (B, H * W, in_channels) -> (B, H * W, d_embed)
-        x = self.mskd_attn(x, causal_mask=True)
+        x = self.mskd_attn(x, causal_mask=False)
         # (B, H * W, d_embed) ->  (B, C, H * d_embed)  -> (B, d_embed, H , W) 
         x = x.transpose(-1, -2).view((b, c, h, w))
     

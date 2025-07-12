@@ -80,3 +80,13 @@ class Encoder(nn.Module):
             EncoderUnit(in_channels, out_channels, n_heads)
             for _ in range(enc_unit)
         ])
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        # x: (B, in_channels, H, W)
+        
+        # (B, in_channels, H, W) -> (B, in_channels, H, W)
+        x = self.pos_encoder(x)
+        # (B, in_channels, H, W) -> (B, in_channels, H, W)
+        for layer in self.layers:
+            x = layer(x)
+        return x # # (B, in_channels, H, W)

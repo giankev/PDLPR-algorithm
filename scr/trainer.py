@@ -47,13 +47,14 @@ def train(train_loader,
     model = model.to(device)
     optimizer = optim.Adam(model.parameters(), lr=lr)
     scheduler = ReduceLROnPlateau(
-    optimizer,
-    mode='min',            # minimizziamo val_loss
-    factor=0.5,            # dimezza il LR
-    patience=8,            # aspetta 8 epoche senza migliorare
-    threshold=5e-4,        # “miglioramento minimo” (0.05 %)
-    cooldown=2,            # 2 epoche di tregua dopo ogni taglio
-    verbose=True)
+            optimizer,
+            mode='max',           # ora massimizzo la seq accuracy!
+            factor=0.5,
+            patience=10,
+            threshold=1e-3,
+            cooldown=2,
+            verbose=True
+    )
     blank_idx = char2idx['-']
     ctc_loss = nn.CTCLoss(blank=blank_idx, zero_infinity=True)
 
@@ -154,10 +155,10 @@ def train(train_loader,
 
         avg_val_loss = total_val_loss / len(val_loader)
         val_losses.append(avg_val_loss)
-        scheduler.step(avg_val_loss)
-
+        
         char_acc = character_accuracy(all_preds, all_targets)
         seq_acc = sequence_accuracy(all_preds, all_targets)
+        scheduler.step(seq_acc)
 
         print(f"Epoch {epoch + 1} | "
               f"Train Loss: {avg_train_loss:.4f} | Train Char Acc: {train_char_acc:.4f} | Train Seq Acc: {train_seq_acc:.4f} | \n "

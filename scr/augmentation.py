@@ -12,19 +12,6 @@ class RandomColorPad:
         color = tuple(random.randint(0, 255) for _ in range(3))
         return transforms.functional.pad(img, padding=self.pad, fill=color)
 
-class RandomVerticalStretch:
-    def __init__(self, scale_range=(0.8, 1.2), p=0.5):
-        self.scale_range = scale_range
-        self.p = p
-
-    def __call__(self, img):
-        if random.random() < self.p:
-            w, h = img.size
-            scale = random.uniform(*self.scale_range)
-            new_h = int(h * scale)
-            img = img.resize((w, new_h), Image.BILINEAR)
-        return img
-
 class RandomMotionBlur:
     def __init__(self, p=0.5, kernel_size=(3, 9)):
         self.p = p
@@ -266,4 +253,24 @@ class RandomLightBeam:
         out = Image.alpha_composite(img, beam_img).convert('RGB')
 
         return out
-    
+
+
+class BluePlateHighlight:
+    def __init__(self, intensity_range=(1.3, 1.7), p=0.3):
+        self.intensity_range = intensity_range
+        self.p = p
+
+    def __call__(self, img):
+        if random.random() >= self.p:
+            return img
+
+        # Convert to numpy array
+        img_np = np.array(img).astype(np.float32) / 255.0
+
+        # Boost the blue channel
+        blue_boost = random.uniform(*self.intensity_range)
+        img_np[..., 2] = np.clip(img_np[..., 2] * blue_boost, 0, 1)
+
+        # Convert back to PIL
+        img_np = (img_np * 255).astype(np.uint8)
+        return Image.fromarray(img_np)

@@ -1,6 +1,6 @@
 import torch
 import torch.nn as nn
-
+from attention import SelfAttention
 
 class FocusStructure(nn.Module):
     def __init__(self):
@@ -16,30 +16,33 @@ class FocusStructure(nn.Module):
         x = torch.cat([patch1, patch2, patch3, patch4], dim=1)  # (B, 12, H/2, W/2)
         return x
 
-class CNNBlock(nn.Module):
-    def __init__(self, in_channels, out_channels, kernel_size = 3, stride = 1, padding = 1, alfa = 0.1): # NOTE: alfa=0.1 [? nel paper non c'è]
-        super().__init__()
-        self.LReLU = nn.LeakyReLU(alfa)
-        self.bn = nn.BatchNorm2d(in_channels)   # NOTE: prima era nn.BatchNorm2d(out_channels) 
-        self.conv = nn.Conv2d(in_channels, out_channels, kernel_size, stride, padding)
 
-    def forward(self, x:torch.Tensor) -> torch.Tensor:
-        x = self.LReLU(x)
+class CNNBlock(nn.Module):
+    def __init__(self, in_channels, out_channels, kernel_size=3, stride=1, padding=1):
+        super().__init__()
+        self.conv = nn.Conv2d(in_channels, out_channels, kernel_size, stride, padding)
+        self.bn = nn.BatchNorm2d(out_channels)  
+        self.activation = nn.SiLU()             # NOTE: LeakyReLU in the original paper 
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        # x: (B, Features, Height, width) 
+        # NOTE:  order is inverted compared to the original paper
+        x = self.conv(x)
         x = self.bn(x)
-        return self.conv(x) # NOTE: prima era self.LReLU(self.bn(self.conv(x))) [! ORDINE INVERTITO]
+        return self.activation(x)
 
 
 class RESBLOCK(nn.Module):
-    def __init__(self, channels, kernel_size=3, stride=1, padding=1, alfa=0.1):
+    def __init__(self, channels, kernel_size=3, stride=1, padding=1):
         super().__init__()
-        self.cnn1 = CNNBlock(channels, channels, kernel_size, stride, padding, alfa)
-        self.cnn2 = CNNBlock(channels, channels, kernel_size, stride, padding, alfa)
+        self.cnn1 = CNNBlock(channels, channels, kernel_size, stride, padding)
+        self.cnn2 = CNNBlock(channels, channels, kernel_size, stride, padding)
 
     def forward(self, x:torch.Tensor) -> torch.Tensor:
         residual = x
         out = self.cnn1(x)
         out = self.cnn2(out)
-        return out + residual # NOTE: prima era  x + self.cnn1(self.cnn2(x)) [! ORDINE INVERTITO]
+        return out + residual
 
 #Output_size = floor((Input_size + 2 * Padding - Kernel_size) / Stride) + 1
 class ConvDownSampling(nn.Module):
@@ -52,14 +55,16 @@ class ConvDownSampling(nn.Module):
 
 
 class IGFE(nn.Module):
-    def __init__(self, in_channels: int=12, out_channels: int=512):
+    def __init__(self, in_channels: int=12, out_channels: int=512, n_heads:int=4):
         super().__init__()
-        mid_channels = out_channels // 2
+        mid_channels = out_channels // 2  # NOTE: Qui potremmo cambiare e mettere un valore più piccolo/grande
         self.focus = FocusStructure()
         self.res1 = RESBLOCK(channels=in_channels)
+        self.attn1 = SelfAttention(n_heads=n_heads, d_embed=in_channels)
         self.res2 = RESBLOCK(channels=in_channels)
-        self.ConvDown1 = ConvDownSampling(in_channels=in_channels, out_channels=mid_channels)  # NOTE: Prima out_channels era 64 [? c'è un motivo particolare?]
+        self.ConvDown1 = ConvDownSampling(in_channels=in_channels, out_channels=mid_channels) 
         self.res3 = RESBLOCK(channels=mid_channels)
+        self.attn2 = SelfAttention(n_heads=n_heads, d_embed=mid_channels)
         self.res4 = RESBLOCK(channels=mid_channels)
         self.ConvDown2 = ConvDownSampling(in_channels = mid_channels, out_channels=out_channels)
 
@@ -68,12 +73,16 @@ class IGFE(nn.Module):
         x = self.focus(x)
         # (B, 12, H/2, W/2) -> (B, 12, H/2, W/2) 
         x = self.res1(x) 
+        print("Shape after Res1: ", x.shape)
+        x = self.attn1(x)
         # (B, 12, H/2, W/2) -> (B, 12, H/2, W/2)
         x = self.res2(x)
+        
         # (B, 12, H/2, W/2) -> (B, 256, H/4, W/4)
         x = self.ConvDown1(x) 
         # (B, 256, H/4, W/4) -> (B, 256, H/4, W/4)
         x = self.res3(x)
+        x = self.attn2(x)
         # (B, 256, H/4, W/4) -> (B, 256, H/4, W/4)
         x = self.res4(x)
         # (B, 256, H/4, W/4) -> (B, 512, H/8, W/8)
@@ -92,7 +101,7 @@ class IGFE(nn.Module):
 #     print(f"Dimensione dell'input dummy: {dummy_input.shape}")
 
 #     igfe_model = IGFE()
-#     print(f"Modello IGFE creato:\n{igfe_model}")
+#     # print(f"Modello IGFE creato:\n{igfe_model}")
 #     total_params = sum(p.numel() for p in igfe_model.parameters() if p.requires_grad)
 #     print(f"\nNumero totale di parametri addestrabili: {total_params}")
 #     size_in_mb = total_params * 4 / 1024 / 1024  # 4 bytes per param (float32)

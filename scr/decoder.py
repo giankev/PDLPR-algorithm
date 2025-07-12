@@ -1,9 +1,7 @@
 import torch
 import torch.nn as nn
-import torch.nn.functional as F
-from feature_extractor import CNNBlock
 from attention import SelfAttention, CrossAttention
-from encoder import PositionalEncoding
+from encoder import PositionalEncoding, AddAndNorm
 
 # output Encoder -> (B, 512, 6, 18) is the input of CNN BLOCK3
 
@@ -13,83 +11,67 @@ from encoder import PositionalEncoding
 # NOTE: CNN BLOCK4 ha stride=3, kernelsize 1, padding=(0,1), out_dim=512
 # (B, 512, 1, 3)
 
-class DecoderUnit(nn.Module):
-    def __init__(self, d_embed: int, d_cross: int, n_heads: int):
+
+class FeedForwardNetwork(nn.Module):
+    def __init__(self, d_embed):
         super().__init__()
-
-
-        self.mskd_attn = SelfAttention(n_heads=n_heads, d_embed=d_embed)
-        self.cross_attn = CrossAttention(n_heads=n_heads, d_embed=d_embed, d_cross=d_cross)
-        self.norm1 = nn.LayerNorm(d_embed)  # NOTE: e se facessimo Group Norm?
-        self.norm2 = nn.LayerNorm(d_embed)  # NOTE: e se facessimo Group Norm?
-        self.norm3 = nn.LayerNorm(d_embed)
         self.linear1 = nn.Linear(d_embed, d_embed)
         self.relu = nn.ReLU()
         self.linear2 = nn.Linear(d_embed, d_embed)
-        
-
-    def forward(self, x, enc_out):
-        # x: (B, in_channels, H, W)
-
-        residual = x
-        
-        b, c, h, w = x.shape
-        # (B, in_channels, H, W) -> (B, in_channels, H * W) -> (B, H * W, d_embed)
-        x = x.view((b, c, h * w)).transpose(-1, -2)
-        # Masked Self-attention
-        # (B, H * W, in_channels) -> (B, H * W, d_embed)
-        x = self.mskd_attn(x, causal_mask=True)
-        # (B, H * W, d_embed) ->  (B, C, H * d_embed)  -> (B, d_embed, H , W) 
-        x = x.transpose(-1, -2).view((b, c, h, w))
     
-        # (B, d_embed, H , W)  -> (B, d_embed, H , W) 
-        x = x + residual
-        # (B, d_embed, H , W) -> # (B, H , W, d_embed)
-        x = x.permute(0, 2, 3, 1)
-        # (B, H , W, d_embed) -> (B, H , W, d_embed)
-        x = self.norm1(x) 
-        # (B, H , W, d_embed) -> (B, d_embed, H , W)
-        x = x.permute(0, 3, 1, 2)
-        residual = x
-
-        # x (latent): # (Batch_Size, Seq_Len_Q, Dim_Q)
-        # (B, Dim_KV, Hy, Wy) -> (B, Seq_Len_KV, Dim_KV)
-        y = enc_out.squeeze(2)
-        x = x.view((b, c, h * w)).transpose(-1, -2)
-        # (B, H * W, d_embed)
-        x = self.cross_attn(x, y)
-        # (B, H * W, d_embed) ->  (B, C, H * d_embed) -> (B, d_embed, H , W) 
-        x = x.transpose(-1, -2).view((b, c, h, w))
-
-        # (B, d_embed, H , W)  -> (B, d_embed, H , W) 
-        x = x + residual
-        # (B, d_embed, H , W) -> # (B, H , W, d_embed)
-        x = x.permute(0, 2, 3, 1)
-        # # (B, H , W, d_embed) -> (B, H , W, d_embed)
-        x = self.norm2(x)
-        # (B, H, W, d_embed) -> (B, d_embed, H , W)
-        x = x.permute(0, 3, 1, 2)
-
-        residual = x
-
-        # (B, W, d_embed, H , W) -> (B, H*W, d_embed)
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+         # x: (B, d_embed, H , W)
+        b, c, h, w = x.shape
+        # (B, d_embed, H , W) -> (B, H*W, d_embed)
         x = x.reshape(b, h*w, c)
         x = self.linear1(x)
         x = self.relu(x)
         x = self.linear2(x)
         # (B, H*W, d_embed) -> (B, H, W, d_embed) -> (B, d_embed, H, W)
         x = x.view(b, h, w, c).permute(0, 3, 1, 2)
+        return x
 
+
+class DecoderUnit(nn.Module):
+    def __init__(self, d_embed: int, d_cross: int, n_heads: int):
+        super().__init__()
+
+        self.mskd_attn = SelfAttention(n_heads=n_heads, d_embed=d_embed)
+        self.cross_attn = CrossAttention(n_heads=n_heads, d_embed=d_embed, d_cross=d_cross)
+        self.addnorm1 = AddAndNorm(d_embed)
+        self.addnorm2 = AddAndNorm(d_embed)
+        self.addnorm3 = AddAndNorm(d_embed)
+        self.ffn = FeedForwardNetwork(d_embed)
+ 
+
+    def forward(self, x, y):
+        # x: (B, in_channels, H, W)
+        # y: (B, in_channels, hy, wy)
+
+        
+        # 1. Masked Self-attention
+        residual = x
+        # (B, in_channels, H, W) -> (B, d_embed, H , W) 
+        x = self.mskd_attn(x, causal_mask=True)
         # (B, d_embed, H , W)  -> (B, d_embed, H , W) 
-        x = x + residual
-        # (B, d_embed, H , W) -> # (B, H , W, d_embed)
-        x = x.permute(0, 2, 3, 1)
-        # # (B, H , W, d_embed) -> (B, H , W, d_embed)
-        x = self.norm3(x)
-        # (B, H , W, W, d_embed) -> (B, W, d_embed, H , W)
-        x = x.permute(0, 3, 1, 2)
+        x = self.addnorm1(x, residual)
+
+        # 2. Cross attention
+        residual = x
+        # (B, d_embed, H , W)  -> (B, d_embed, H , W)
+        x = self.cross_attn(x, y)
+        # (B, d_embed, H , W)  -> (B, d_embed, H , W) 
+        x = self.addnorm2(x, residual)
+
+        #3. FFN
+        residual = x
+        # (B, W, d_embed, H , W) -> (B, W, d_embed, H , W)
+        x = self.ffn(x)
+        # (B, d_embed, H , W)  -> (B, d_embed, H , W) 
+        x = self.addnorm3(x, residual) 
 
         return x
+
 
 
 class Decoder(nn.Module):
@@ -117,15 +99,11 @@ class Decoder(nn.Module):
     def forward(self, x, conv_out):
         # x: (B, in_channels, H, W)
         # conv_out: (B, d_embed, a, b)
-        B, C, H, W = x.shape
 
-        # (B, C, H, W) -> (B, C, H*W) -> (B, H*W, C)
-        x = x.flatten(2).permute(0, 2, 1)
-        # (B, H*W, C)
+        # (B, in_channels, H, W) -> (B, in_channels, H, W)
         x = self.pos_encoder(x)
-        # (B, H*W, C) -> (B, C, H*W) -> (B, C, H, W)
-        x = x.permute(0, 2, 1).reshape(B, C, H, W)
-
+        
+        # (B, in_channels, H, W) -> (B, in_channels, H, W)
         for layer in self.layers:
             x = layer(x, conv_out)
-        return x
+        return x # (B, in_channels, H, W)

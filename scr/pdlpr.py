@@ -66,31 +66,31 @@ class PDLPR(nn.Module):
         return logits
 
 
-# if __name__ == "__main__":
-#     batch_size = 1
-#     input_channels = 3
-#     input_height = 48
-#     input_width = 144
+if __name__ == "__main__":
+    batch_size = 1
+    input_channels = 3
+    input_height = 48
+    input_width = 144
 
-#     dummy_input = torch.randn(batch_size, input_channels, input_height, input_width)
-#     print(f"Dimensione dell'input dummy: {list(dummy_input.shape)}")
+    dummy_input = torch.randn(batch_size, input_channels, input_height, input_width)
+    print(f"Dimensione dell'input dummy: {list(dummy_input.shape)}")
 
-#     model = PDLPR()
-#     # print(f"Modello PDLPR creato:\n{model}")
-#     total_params = sum(p.numel() for p in model.parameters() if p.requires_grad)
-#     print(f"\nNumero totale di parametri addestrabili: {total_params}")
-#     size_in_mb = total_params * 4 / 1024 / 1024  # 4 bytes per param (float32)
-#     print(f"Model size: {size_in_mb:.2f} MB")
+    model = PDLPR()
+    # print(f"Modello PDLPR creato:\n{model}")
+    total_params = sum(p.numel() for p in model.parameters() if p.requires_grad)
+    print(f"\nNumero totale di parametri addestrabili: {total_params}")
+    size_in_mb = total_params * 4 / 1024 / 1024  # 4 bytes per param (float32)
+    print(f"Model size: {size_in_mb:.2f} MB")
     
 
-#     output_features = model(dummy_input)
+    output_features = model(dummy_input)
 
-#     expected_output_shape = (batch_size, 108, 68)
-#     print(f"\nDimensione reali dell'output: {output_features.shape}")
-#     print(f"Dimensione attesa dell'output: {expected_output_shape}")
+    expected_output_shape = (batch_size, 108, 68)
+    print(f"\nDimensione reali dell'output: {output_features.shape}")
+    print(f"Dimensione attesa dell'output: {expected_output_shape}")
 
-#     assert output_features.shape == expected_output_shape, \
-#         f"Errore: la dimensione dell'output non corrisponde a quella attesa! " \
-#         f"Ottenuto: {output_features.shape}, Atteso: {expected_output_shape}"
+    assert output_features.shape == expected_output_shape, \
+        f"Errore: la dimensione dell'output non corrisponde a quella attesa! " \
+        f"Ottenuto: {output_features.shape}, Atteso: {expected_output_shape}"
 
-#     print("\nTest completato con successo: Le dimensioni dell'output corrispondono a quelle attese.")
+    print("\nTest completato con successo: Le dimensioni dell'output corrispondono a quelle attese.")

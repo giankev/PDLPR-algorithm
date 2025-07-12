@@ -2,6 +2,7 @@ import os
 import torch
 import torch.nn as nn
 import torch.optim as optim
+from torch.optim.lr_scheduler import ReduceLROnPlateau
 from torch.utils.data import DataLoader
 from tqdm import tqdm
 import numpy as np
@@ -44,7 +45,17 @@ def train(train_loader,
           lr_decay_epochs=20):
 
     model = model.to(device)
-    optimizer = optim.Adam(model.parameters(), lr=lr)
+    optimizer = optim.AdamW(model.parameters(), lr=lr, weight_decay=1e-4)
+    scheduler = ReduceLROnPlateau(
+            optimizer,
+            mode='max',           # ora massimizzo la seq accuracy!
+            factor=0.3,
+            patience=8,
+            threshold=5e-4,
+            cooldown=3,
+            verbose=True,
+            min_lr=1e-6
+    )
     blank_idx = char2idx['-']
     ctc_loss = nn.CTCLoss(blank=blank_idx, zero_infinity=True)
 
@@ -91,6 +102,7 @@ def train(train_loader,
 
             optimizer.zero_grad()
             loss.backward()
+            torch.nn.utils.clip_grad_norm_(model.parameters(), max_norm=5.0)
             optimizer.step()
 
             # Decode greedy per il training set
@@ -144,15 +156,17 @@ def train(train_loader,
 
         avg_val_loss = total_val_loss / len(val_loader)
         val_losses.append(avg_val_loss)
-
+        
         char_acc = character_accuracy(all_preds, all_targets)
         seq_acc = sequence_accuracy(all_preds, all_targets)
+        scheduler.step(seq_acc)
 
         print(f"Epoch {epoch + 1} | "
               f"Train Loss: {avg_train_loss:.4f} | Train Char Acc: {train_char_acc:.4f} | Train Seq Acc: {train_seq_acc:.4f} | \n "
               f"Val Loss: {avg_val_loss:.4f} | Val Char Acc: {char_acc:.4f} | Val Seq Acc: {seq_acc:.4f}")
 
         # Decay del learning rate
+        '''
         if (epoch + 1) % lr_decay_epochs == 0:
             if avg_val_loss >= best_val_loss:
                 for group in optimizer.param_groups:
@@ -162,7 +176,7 @@ def train(train_loader,
                 last_decay_epoch = epoch + 1
             else:
                 best_val_loss = avg_val_loss
-
+        '''
         # Salvataggio checkpoint
         is_last_epoch = (epoch + 1 == start_epoch + num_epochs)
         if save_checkpoint_path and ((epoch + 1) % 5 == 0 or is_last_epoch):

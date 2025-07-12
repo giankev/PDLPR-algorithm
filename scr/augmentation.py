@@ -3,14 +3,25 @@ import random
 import cv2
 from PIL import Image, ImageFilter, ImageDraw
 from torchvision import transforms
+import torchvision.transforms.functional as TF
+import random
 
 class RandomColorPad:
-    def __init__(self, pad=(10, 20, 10, 20)):
-        self.pad = pad
+    def __init__(self, pad_y_range=(5, 15), pad_x_range=(10, 30)):
+        self.pad_y_range = pad_y_range  # (min_y, max_y)
+        self.pad_x_range = pad_x_range  # (min_x, max_x)
 
     def __call__(self, img):
+        # Padding casuale per asse Y (top e bottom)
+        vertical_pad = random.randint(*self.pad_y_range)
+
+        # Padding casuale per asse X (left e right)
+        horizontal_pad = random.randint(*self.pad_x_range)
+
+        # Colore casuale
         color = tuple(random.randint(0, 255) for _ in range(3))
-        return transforms.functional.pad(img, padding=self.pad, fill=color)
+
+        return TF.pad(img, (horizontal_pad, vertical_pad, horizontal_pad, vertical_pad), fill=color)
 
 class RandomMotionBlur:
     def __init__(self, p=0.5, kernel_size=(3, 9)):

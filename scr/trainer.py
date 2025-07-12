@@ -45,7 +45,7 @@ def train(train_loader,
           lr_decay_epochs=20):
 
     model = model.to(device)
-    optimizer = optim.Adam(model.parameters(), lr=lr)
+    optimizer = optim.AdamW(model.parameters(), lr=lr, weight_decay=1e-4)
     scheduler = ReduceLROnPlateau(
             optimizer,
             mode='max',           # ora massimizzo la seq accuracy!

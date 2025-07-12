@@ -3,62 +3,63 @@ import torch.nn as nn
 import torch.nn.functional as F
 import math
 
+import torch
+import torch.nn as nn
+import torch.nn.functional as F
+import math
+
+
 class SelfAttention(nn.Module):
-    def __init__(self, n_heads, d_embed, in_proj_bias=True, out_proj_bias=True):
+    def __init__(self, n_heads: int, d_embed: int,
+                 in_proj_bias: bool = True, out_proj_bias: bool = True):
         super().__init__()
-        # This combines the Wq, Wk and Wv matrices into one matrix
-        self.in_proj = nn.Linear(d_embed, 3 * d_embed, bias=in_proj_bias)
-        # This one represents the Wo matrix
-        self.out_proj = nn.Linear(d_embed, d_embed, bias=out_proj_bias)
-        self.n_heads = n_heads
-        self.d_head = d_embed // n_heads
+        self.in_proj  = nn.Linear(d_embed, 3 * d_embed, bias=in_proj_bias)  # Wq‖Wk‖Wv
+        self.out_proj = nn.Linear(d_embed, d_embed, bias=out_proj_bias)     # Wo
+        self.n_heads  = n_heads
+        self.d_head   = d_embed // n_heads
 
-    def forward(self, x, causal_mask=False):
-        # x: # (Batch_Size, Seq_Len, Dim)
+    def forward(self, x: torch.Tensor, causal_mask: bool = False) -> torch.Tensor:
+   
+        needs_unflatten = False
+        if x.dim() == 4:                          # feature map da CNN
+            B, C, H, W = x.shape
+            x = x.flatten(2).permute(0, 2, 1)     # (B, H*W, C)
+            needs_unflatten = True
 
-        # (Batch_Size, Seq_Len, Dim)
-        input_shape = x.shape 
-        batch_size, sequence_length, d_embed = input_shape 
+        B, T, D = x.shape
+        assert D == self.n_heads * self.d_head, \
+            f"d_embed={D} non divisibile per n_heads={self.n_heads}"
 
-        # (Batch_Size, Seq_Len, H, Dim / H)
-        interim_shape = (batch_size, sequence_length, self.n_heads, self.d_head) 
 
-        # (Batch_Size, Seq_Len, Dim) -> (Batch_Size, Seq_Len, Dim * 3) -> 3 tensor of shape (Batch_Size, Seq_Len, Dim)
-        q, k, v = self.in_proj(x).chunk(3, dim=-1)
-        
-        # (Batch_Size, Seq_Len, Dim) -> (Batch_Size, Seq_Len, H, Dim / H) -> (Batch_Size, H, Seq_Len, Dim / H)
-        q = q.view(interim_shape).transpose(1, 2)
-        k = k.view(interim_shape).transpose(1, 2)
-        v = v.view(interim_shape).transpose(1, 2)
+        q, k, v = self.in_proj(x).chunk(3, dim=-1)                 # (B, T, C) ×3
 
-        # (Batch_Size, H, Seq_Len, Dim / H) @ (Batch_Size, H, Dim / H, Seq_Len) -> (Batch_Size, H, Seq_Len, Seq_Len)
-        weight = q @ k.transpose(-1, -2)
-        
+        q = q.view(B, T, self.n_heads, self.d_head).transpose(1, 2)  # (B, H, T, Dh)
+        k = k.view(B, T, self.n_heads, self.d_head).transpose(1, 2)
+        v = v.view(B, T, self.n_heads, self.d_head).transpose(1, 2)
+
+     
+        attn = (q @ k.transpose(-1, -2)) / math.sqrt(self.d_head)    # (B, H, T, T)
+
         if causal_mask:
-            # Mask where the upper triangle (above the principal diagonal) is 1
-            mask = torch.ones_like(weight, dtype=torch.bool).triu(1) 
-            # Fill the upper triangle with -inf
-            weight.masked_fill_(mask, float('-inf')) 
-        
-        # Divide by d_k (Dim / H). 
-        # (Batch_Size, H, Seq_Len, Seq_Len) -> (Batch_Size, H, Seq_Len, Seq_Len)
-        weight /= math.sqrt(self.d_head) 
-        weight = F.softmax(weight, dim=-1) 
+            attn = attn.masked_fill(
+                torch.ones_like(attn, dtype=torch.bool).triu(1),
+                float('-inf')
+            )
 
-        # (Batch_Size, H, Seq_Len, Seq_Len) @ (Batch_Size, H, Seq_Len, Dim / H) -> (Batch_Size, H, Seq_Len, Dim / H)
-        output = weight @ v
+        attn = F.softmax(attn, dim=-1)
 
-        # (Batch_Size, H, Seq_Len, Dim / H) -> (Batch_Size, Seq_Len, H, Dim / H)
-        output = output.transpose(1, 2) 
+        out = (attn @ v)                           # (B, H, T, Dh)
+        out = out.transpose(1, 2).contiguous()     # (B, T, H, Dh)
+        out = out.view(B, T, D)                    # (B, T, C)
 
-        # (Batch_Size, Seq_Len, H, Dim / H) -> (Batch_Size, Seq_Len, Dim)
-        output = output.reshape(input_shape) 
+      
+        out = self.out_proj(out)                   # (B, T, C)
 
-        # (Batch_Size, Seq_Len, Dim) -> (Batch_Size, Seq_Len, Dim)
-        output = self.out_proj(output) 
-        
-        # (Batch_Size, Seq_Len, Dim)
-        return output
+    
+        if needs_unflatten:
+            out = out.permute(0, 2, 1).reshape(B, D, H, W)  # (B, C, H, W)
+
+        return out
 
 class CrossAttention(nn.Module):
     def __init__(self, n_heads, d_embed, d_cross, in_proj_bias=True, out_proj_bias=True):

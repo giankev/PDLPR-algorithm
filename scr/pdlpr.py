@@ -4,14 +4,6 @@ from feature_extractor import IGFE, CNNBlock
 from encoder import Encoder
 from decoder import Decoder
 
-# output Encoder -> (B, 512, 6, 18) is the input of CNN BLOCK3
-
-# NOTE: CNN BLOCK3 ha stride=3, kernelsize (2,1), padding=1, out_dim=512
-# (B, 512, 6, 18) -> (B, 512, 3, 7) 
-
-# NOTE: CNN BLOCK4 ha stride=3, kernelsize 1, padding=(0,1), out_dim=512
-# (B, 512, 1, 3)
-
 class PDLPR(nn.Module):
     def __init__(self, d_embed: int=512, d_cross: int=18, units: int=3,
                  n_heads: int=8, height: int = 6, width: int=18, num_classes: int=68):
@@ -51,7 +43,7 @@ class PDLPR(nn.Module):
         # print("Enc output:", x.shape)
 
         # (B, 512, 6, 18) -> (B, 512, 3, 6) 
-        conv_out = self.cnn4(self.cnn3(x)) # (B, 512, 1, 3)
+        conv_out = self.cnn4(self.cnn3(x)) # (B, 512, 3, 6)
 
         # (B, 512, 6, 18) -> (B, 512, 6, 18)
         x = self.decoder(x, conv_out)

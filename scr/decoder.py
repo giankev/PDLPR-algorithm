@@ -3,14 +3,6 @@ import torch.nn as nn
 from attention import SelfAttention, CrossAttention
 from encoder import PositionalEncoding, AddAndNorm
 
-# output Encoder -> (B, 512, 6, 18) is the input of CNN BLOCK3
-
-# NOTE: CNN BLOCK3 ha stride=3, kernelsize (2,1), padding=1, out_dim=512
-# (B, 512, 6, 18) -> (B, 512, 3, 7) 
-
-# NOTE: CNN BLOCK4 ha stride=3, kernelsize 1, padding=(0,1), out_dim=512
-# (B, 512, 1, 3)
-
 
 class FeedForwardNetwork(nn.Module):
     def __init__(self, d_embed):
@@ -52,7 +44,7 @@ class DecoderUnit(nn.Module):
         # 1. Masked Self-attention
         residual = x
         # (B, in_channels, H, W) -> (B, d_embed, H , W) 
-        x = self.mskd_attn(x, causal_mask=True)
+        x = self.mskd_attn(x, causal_mask=False)
         # (B, d_embed, H , W)  -> (B, d_embed, H , W) 
         x = self.addnorm1(x, residual)
 
@@ -73,7 +65,6 @@ class DecoderUnit(nn.Module):
         return x
 
 
-
 class Decoder(nn.Module):
     def __init__(self,
                  height = 6,
@@ -86,11 +77,12 @@ class Decoder(nn.Module):
 
         self.height = height
         self.width = width
-        self.seq_len = height * width
         self.d_model = d_embed
 
         self.pos_encoder = PositionalEncoding(d_model=self.d_model,
-                                              seq_len=self.seq_len)
+                                              height=self.height,
+                                              width=self.width)
+        
         self.layers = nn.ModuleList([
             DecoderUnit(d_embed=d_embed, d_cross=d_cross, n_heads=n_heads)
             for _ in range(dec_unit)

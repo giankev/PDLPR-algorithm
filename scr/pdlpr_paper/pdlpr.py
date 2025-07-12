@@ -87,12 +87,12 @@ if __name__ == "__main__":
 
     output_features = model(dummy_input)
 
-    # expected_output_shape = (batch_size, 512, 6, 18)
-    # print(f"\nDimensione reali dell'output: {output_features.shape}")
-    # print(f"Dimensione attesa dell'output: {expected_output_shape}")
+    expected_output_shape = (batch_size, 512, 6, 18)
+    print(f"\nDimensione reali dell'output: {output_features.shape}")
+    print(f"Dimensione attesa dell'output: {expected_output_shape}")
 
-    # assert output_features.shape == expected_output_shape, \
-    #     f"Errore: la dimensione dell'output non corrisponde a quella attesa! " \
-    #     f"Ottenuto: {output_features.shape}, Atteso: {expected_output_shape}"
+    assert output_features.shape == expected_output_shape, \
+        f"Errore: la dimensione dell'output non corrisponde a quella attesa! " \
+        f"Ottenuto: {output_features.shape}, Atteso: {expected_output_shape}"
 
-    # print("\nTest completato con successo: Le dimensioni dell'output corrispondono a quelle attese.")
+    print("\nTest completato con successo: Le dimensioni dell'output corrispondono a quelle attese.")

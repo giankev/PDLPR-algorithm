@@ -52,7 +52,7 @@ class DecoderUnit(nn.Module):
         # 1. Masked Self-attention
         residual = x
         # (B, in_channels, H, W) -> (B, d_embed, H , W) 
-        x = self.mskd_attn(x, causal_mask=True)
+        x = self.mskd_attn(x, causal_mask=False)
         # (B, d_embed, H , W)  -> (B, d_embed, H , W) 
         x = self.addnorm1(x, residual)
 

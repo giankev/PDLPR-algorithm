@@ -49,11 +49,12 @@ def train(train_loader,
     scheduler = ReduceLROnPlateau(
             optimizer,
             mode='max',           # ora massimizzo la seq accuracy!
-            factor=0.5,
-            patience=10,
-            threshold=1e-3,
-            cooldown=2,
-            verbose=True
+            factor=0.3,
+            patience=8,
+            threshold=5e-4,
+            cooldown=3,
+            verbose=True,
+            min_lr=1e-6
     )
     blank_idx = char2idx['-']
     ctc_loss = nn.CTCLoss(blank=blank_idx, zero_infinity=True)

@@ -13,9 +13,21 @@ class PositionalEncoding(nn.Module):
         )
         nn.init.trunc_normal_(self.pe, std=0.02)  # inizializzazione
 
-    def forward(self, x: torch.Tensor) -> torch.Tensor:
-        # x: (B, seq_len, d_model)
-        return x + self.pe[:, :x.size(1), :]
+        def forward(self, x: torch.Tensor) -> torch.Tensor:
+        if x.dim() == 3:
+            # (B, seq_len, d_model)
+            return x + self.pe[:, :x.size(1), :]
+
+        elif x.dim() == 4:
+            # (B, C, H, W)  →  flatten HW
+            B, C, H, W = x.shape
+            x_flat = x.flatten(2).permute(0, 2, 1)       # (B, H*W, C)
+            x_flat = x_flat + self.pe[:, :x_flat.size(1), :]
+            x = x_flat.permute(0, 2, 1).reshape(B, C, H, W)
+            return x
+
+        else:
+            raise ValueError("Input must be 3D or 4D tensor")
 
 
 class AddAndNorm(nn.Module):

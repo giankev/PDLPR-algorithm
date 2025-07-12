@@ -34,8 +34,8 @@ class CNNBlock(nn.Module):
 class RESBLOCK(nn.Module):
     def __init__(self, channels, kernel_size=3, stride=1, padding=1, alfa=0.1):
         super().__init__()
-        self.cnn1 = CNNBlock(channels, channels, kernel_size, stride, padding, alfa)
-        self.cnn2 = CNNBlock(channels, channels, kernel_size, stride, padding, alfa)
+        self.cnn1 = CNNBlock(channels, channels, kernel_size, stride, padding)
+        self.cnn2 = CNNBlock(channels, channels, kernel_size, stride, padding)
 
     def forward(self, x:torch.Tensor) -> torch.Tensor:
         residual = x

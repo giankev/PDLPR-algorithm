@@ -3,6 +3,7 @@ import torch
 import torch.nn as nn
 import torch.optim as optim
 from torch.utils.data import DataLoader
+from torch.amp import autocast, GradScaler
 from tqdm import tqdm
 import numpy as np
 import random
@@ -15,9 +16,7 @@ def set_seed(seed: int = 42):
     np.random.seed(seed)
     random.seed(seed)
 
-
 def character_accuracy(preds, targets):
-    """Calcola la accuratezza a livello di carattere."""
     correct = 0
     total = 0
     for p, t in zip(preds, targets):
@@ -25,11 +24,10 @@ def character_accuracy(preds, targets):
         total += len(t)
     return correct / total if total > 0 else 0.0
 
-
 def sequence_accuracy(preds, targets):
-    """Calcola la accuratezza a livello di sequenza intera."""
     correct = sum(p == t for p, t in zip(preds, targets))
     return correct / len(targets)
+
 
 def train(train_loader,
           val_loader,
@@ -45,16 +43,14 @@ def train(train_loader,
 
     model = model.to(device)
     optimizer = optim.Adam(model.parameters(), lr=lr)
+    scaler = GradScaler()
     blank_idx = char2idx['-']
     ctc_loss = nn.CTCLoss(blank=blank_idx, zero_infinity=True)
 
     start_epoch = 0
     best_val_loss = float('inf')
     last_decay_epoch = 0
-
-    # Salvataggio delle perdite per ogni epoca
-    train_losses = []
-    val_losses = []
+    train_losses, val_losses = [], []
 
     # Caricamento checkpoint se disponibile
     if load_checkpoint_path and os.path.isfile(load_checkpoint_path):
@@ -66,36 +62,36 @@ def train(train_loader,
         last_decay_epoch = checkpoint.get('last_decay_epoch', 0)
         print(f"Checkpoint caricato da {load_checkpoint_path}, ripartendo dall'epoca {start_epoch}")
 
+    # Creazione cartella salvataggio checkpoint
     if save_checkpoint_path:
         os.makedirs(save_checkpoint_path, exist_ok=True)
 
     for epoch in range(start_epoch, start_epoch + num_epochs):
         model.train()
         total_train_loss = 0
+        all_train_preds, all_train_targets = [], []
         progress_bar = tqdm(train_loader, desc=f"Epoch {epoch + 1}/{start_epoch + num_epochs}")
 
-        all_train_preds, all_train_targets = [], []
         for images, labels in progress_bar:
-            images = images.to(device)
-            labels = labels.to(device)
-
+            images, labels = images.to(device), labels.to(device)
             batch_size, seq_len = labels.shape
             targets = labels.view(-1)
             target_lengths = torch.full((batch_size,), seq_len, dtype=torch.long, device=device)
 
-            logits = model(images)  # (B, T, C)
-            log_probs = logits.log_softmax(2).permute(1, 0, 2)  # (T, B, C)
-            input_lengths = torch.full((batch_size,), log_probs.size(0), dtype=torch.long, device=device)
-
-            loss = ctc_loss(log_probs, targets, input_lengths, target_lengths)
-
             optimizer.zero_grad()
-            loss.backward()
-            optimizer.step()
 
-            # Decode greedy per il training set
+            with autocast(device_type=device):
+                logits = model(images)  # (B, T, C)
+                log_probs = logits.log_softmax(dim=2).permute(1, 0, 2)  # (T, B, C)
+                input_lengths = torch.full((batch_size,), log_probs.size(0), dtype=torch.long, device=device)
+                loss = ctc_loss(log_probs, targets, input_lengths, target_lengths)
+
+            scaler.scale(loss).backward()
+            scaler.step(optimizer)
+            scaler.update()
+
             with torch.no_grad():
-                pred_sequences = log_probs.permute(1, 0, 2).argmax(2)  # (B, T)
+                pred_sequences = log_probs.permute(1, 0, 2).argmax(dim=2)  # (B, T)
                 for pred, true_label in zip(pred_sequences, labels):
                     pred = torch.unique_consecutive(pred, dim=0)
                     pred = [p.item() for p in pred if p.item() != blank_idx]
@@ -105,7 +101,6 @@ def train(train_loader,
 
             total_train_loss += loss.item()
             progress_bar.set_postfix(loss=loss.item())
-        
 
         avg_train_loss = total_train_loss / len(train_loader)
         train_losses.append(avg_train_loss)
@@ -115,55 +110,52 @@ def train(train_loader,
         # Validazione
         model.eval()
         total_val_loss = 0
-        all_preds, all_targets = [], []
+        all_val_preds, all_val_targets = [], []
 
         with torch.no_grad():
             for val_images, val_labels in val_loader:
-                val_images = val_images.to(device)
-                val_labels = val_labels.to(device)
-
+                val_images, val_labels = val_images.to(device), val_labels.to(device)
                 batch_size, seq_len = val_labels.shape
                 val_targets = val_labels.view(-1)
                 val_target_lengths = torch.full((batch_size,), seq_len, dtype=torch.long, device=device)
 
-                val_logits = model(val_images)
-                val_log_probs = val_logits.log_softmax(2).permute(1, 0, 2)
-                val_input_lengths = torch.full((batch_size,), val_log_probs.size(0), dtype=torch.long, device=device)
+                with autocast(device_type=device):
+                    val_logits = model(val_images)
+                    val_log_probs = val_logits.log_softmax(dim=2).permute(1, 0, 2)
+                    val_input_lengths = torch.full((batch_size,), val_log_probs.size(0), dtype=torch.long, device=device)
+                    val_loss = ctc_loss(val_log_probs, val_targets, val_input_lengths, val_target_lengths)
 
-                val_loss = ctc_loss(val_log_probs, val_targets, val_input_lengths, val_target_lengths)
                 total_val_loss += val_loss.item()
 
-                # Decode greedy
-                pred_sequences = val_log_probs.permute(1, 0, 2).argmax(2)  # (B, T)
+                pred_sequences = val_log_probs.permute(1, 0, 2).argmax(dim=2)
                 for pred, true_label in zip(pred_sequences, val_labels):
                     pred = torch.unique_consecutive(pred, dim=0)
                     pred = [p.item() for p in pred if p.item() != blank_idx]
                     target = [t.item() for t in true_label if t.item() != blank_idx]
-                    all_preds.append(pred)
-                    all_targets.append(target)
+                    all_val_preds.append(pred)
+                    all_val_targets.append(target)
 
         avg_val_loss = total_val_loss / len(val_loader)
         val_losses.append(avg_val_loss)
-
-        char_acc = character_accuracy(all_preds, all_targets)
-        seq_acc = sequence_accuracy(all_preds, all_targets)
+        val_char_acc = character_accuracy(all_val_preds, all_val_targets)
+        val_seq_acc = sequence_accuracy(all_val_preds, all_val_targets)
 
         print(f"Epoch {epoch + 1} | "
-              f"Train Loss: {avg_train_loss:.4f} | Train Char Acc: {train_char_acc:.4f} | Train Seq Acc: {train_seq_acc:.4f} | \n "
-              f"Val Loss: {avg_val_loss:.4f} | Val Char Acc: {char_acc:.4f} | Val Seq Acc: {seq_acc:.4f}")
+              f"Train Loss: {avg_train_loss:.4f} | Train Char Acc: {train_char_acc:.4f} | Train Seq Acc: {train_seq_acc:.4f} | "
+              f"Val Loss: {avg_val_loss:.4f} | Val Char Acc: {val_char_acc:.4f} | Val Seq Acc: {val_seq_acc:.4f}")
 
-        # Decay del learning rate
+        # Aggiornamento learning rate se non migliora la val loss dopo lr_decay_epochs epoche
         if (epoch + 1) % lr_decay_epochs == 0:
             if avg_val_loss >= best_val_loss:
-                for group in optimizer.param_groups:
-                    old_lr = group['lr']
-                    group['lr'] = old_lr * lr_decay_factor
-                print(f"Learning rate ridotto a {group['lr']:.2e} (val loss non migliorata)")
+                for param_group in optimizer.param_groups:
+                    old_lr = param_group['lr']
+                    param_group['lr'] = old_lr * lr_decay_factor
+                print(f"Learning rate ridotto a {param_group['lr']:.2e} (val loss non migliorata)")
                 last_decay_epoch = epoch + 1
             else:
                 best_val_loss = avg_val_loss
 
-        # Salvataggio checkpoint
+        # Salvataggio checkpoint ogni 5 epoche o all'ultima
         is_last_epoch = (epoch + 1 == start_epoch + num_epochs)
         if save_checkpoint_path and ((epoch + 1) % 5 == 0 or is_last_epoch):
             checkpoint = {

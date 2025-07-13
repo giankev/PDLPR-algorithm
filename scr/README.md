@@ -4,3 +4,5 @@
 2. Positional encoding 2D
 3. Modifica di (CNNBlock3 + CNNBlock4): ora l'output finale è B x 512 x 3 x 6  
 4. No Masked MHA nel decoder
+5. aggiunto attention tra i ResBlock
+6. modifica trainer function per gestire due GPU

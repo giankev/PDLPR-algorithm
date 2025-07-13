@@ -88,7 +88,7 @@ class IGFE(nn.Module):
         x = self.focus(x)
         # (B, 12, H/2, W/2) -> (B, 12, H/2, W/2) 
         x = self.res1(x) 
-    # (B, 12, H/2, W/2) -> (B, 12, H/2, W/2) 
+        # (B, 12, H/2, W/2) -> (B, 12, H/2, W/2) 
         x = self.attn1(x)
         # (B, 12, H/2, W/2) -> (B, 12, H/2, W/2)
         x = self.res2(x)

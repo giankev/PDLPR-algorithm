@@ -82,9 +82,11 @@ def train(train_loader,
 
             with autocast(device_type=device):
                 logits = model(images)  # (B, T, C)
-                log_probs = logits.log_softmax(dim=2).permute(1, 0, 2)  # (T, B, C)
-                input_lengths = torch.full((batch_size,), log_probs.size(0), dtype=torch.long, device=device)
-                loss = ctc_loss(log_probs, targets, input_lengths, target_lengths)
+                log_probs = logits.log_softmax(dim=2)  # (B, T, C)
+            
+            log_probs = log_probs.permute(1, 0, 2).float()  # (T, B, C)
+            input_lengths = torch.full((batch_size,), log_probs.size(0), dtype=torch.long, device=device)
+            loss = ctc_loss(log_probs, targets, input_lengths, target_lengths)
 
             scaler.scale(loss).backward()
             scaler.step(optimizer)
@@ -121,9 +123,10 @@ def train(train_loader,
 
                 with autocast(device_type=device):
                     val_logits = model(val_images)
-                    val_log_probs = val_logits.log_softmax(dim=2).permute(1, 0, 2)
-                    val_input_lengths = torch.full((batch_size,), val_log_probs.size(0), dtype=torch.long, device=device)
-                    val_loss = ctc_loss(val_log_probs, val_targets, val_input_lengths, val_target_lengths)
+
+                val_log_probs = val_logits.log_softmax(dim=2).permute(1, 0, 2)
+                val_input_lengths = torch.full((batch_size,), val_log_probs.size(0), dtype=torch.long, device=device)
+                val_loss = ctc_loss(val_log_probs, val_targets, val_input_lengths, val_target_lengths)
 
                 total_val_loss += val_loss.item()
 

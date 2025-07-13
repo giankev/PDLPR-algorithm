@@ -5,7 +5,6 @@ from attention import SelfAttention
 class FocusStructure(nn.Module):
     def __init__(self):
         super().__init__()
-        # pass   # TODO: si può rimuovere il pass
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         # Input size: (B, 3, H, W)
@@ -54,17 +53,33 @@ class ConvDownSampling(nn.Module):
         return self.conv(x)
 
 
+class AttentionBlock(nn.Module):
+        def __init__(self, n_heads: int, d_embed: int):
+            super().__init__()
+            self.attn = SelfAttention(n_heads=n_heads, d_embed=d_embed)
+            self.bn = nn.BatchNorm2d(d_embed)  
+            self.activation = nn.SiLU()
+        
+        def forward(self, x):
+            residual = x
+            # NOTE: devo aggiungere positional encoding?
+            x = self.attn(x)
+            x = self.bn(x)
+            x =  self.activation(x)
+            out = x + residual
+            return out
+
 class IGFE(nn.Module):
     def __init__(self, in_channels: int=12, out_channels: int=512, n_heads: int=4):
         super().__init__()
         mid_channels = out_channels // 2  # NOTE: Qui potremmo cambiare e mettere un valore più piccolo/grande
         self.focus = FocusStructure()
         self.res1 = RESBLOCK(channels=in_channels)
-        self.attn1 = SelfAttention(n_heads=n_heads, d_embed=in_channels)
+        self.attn1 = AttentionBlock(n_heads=n_heads, d_embed=in_channels)
         self.res2 = RESBLOCK(channels=in_channels)
         self.ConvDown1 = ConvDownSampling(in_channels=in_channels, out_channels=mid_channels) 
         self.res3 = RESBLOCK(channels=mid_channels)
-        self.attn2 = SelfAttention(n_heads=n_heads, d_embed=mid_channels)
+        self.attn2 = AttentionBlock(n_heads=n_heads, d_embed=mid_channels)
         self.res4 = RESBLOCK(channels=mid_channels)
         self.ConvDown2 = ConvDownSampling(in_channels = mid_channels, out_channels=out_channels)
 
@@ -73,6 +88,7 @@ class IGFE(nn.Module):
         x = self.focus(x)
         # (B, 12, H/2, W/2) -> (B, 12, H/2, W/2) 
         x = self.res1(x) 
+    # (B, 12, H/2, W/2) -> (B, 12, H/2, W/2) 
         x = self.attn1(x)
         # (B, 12, H/2, W/2) -> (B, 12, H/2, W/2)
         x = self.res2(x)
@@ -80,6 +96,7 @@ class IGFE(nn.Module):
         x = self.ConvDown1(x) 
         # (B, 256, H/4, W/4) -> (B, 256, H/4, W/4)
         x = self.res3(x)
+        # (B, 256, H/4, W/4) -> (B, 256, H/4, W/4)
         x = self.attn2(x)
         # (B, 256, H/4, W/4) -> (B, 256, H/4, W/4)
         x = self.res4(x)

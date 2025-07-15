@@ -20,14 +20,21 @@ class CNNBlock(nn.Module):
     def __init__(self, in_channels, out_channels, kernel_size=3, stride=1, padding=1):
         super().__init__()
         self.conv = nn.Conv2d(in_channels, out_channels, kernel_size, stride, padding)
-        self.bn = nn.BatchNorm2d(out_channels)  
-        self.activation = nn.SiLU()             # NOTE: LeakyReLU in the original paper 
+
+        if out_channels < 32:
+            num_groups = 4
+        else:
+            num_groups = 32 
+
+        self.norm = nn.GroupNorm(num_groups=num_groups, num_channels=out_channels)
+        # self.bn = nn.BatchNorm2d(out_channels)            # NOTE: prima era Batch norm  
+        self.activation = nn.SiLU()                         # NOTE: LeakyReLU in the original paper 
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         # x: (B, Features, Height, width) 
         # NOTE:  order is inverted compared to the original paper
         x = self.conv(x)
-        x = self.bn(x)
+        x = self.norm(x)
         return self.activation(x)
 
 
@@ -53,33 +60,33 @@ class ConvDownSampling(nn.Module):
         return self.conv(x)
 
 
-class AttentionBlock(nn.Module):
-        def __init__(self, n_heads: int, d_embed: int):
-            super().__init__()
-            self.attn = SelfAttention(n_heads=n_heads, d_embed=d_embed)
-            self.bn = nn.BatchNorm2d(d_embed)  
-            self.activation = nn.SiLU()
+# class AttentionBlock(nn.Module):
+#         def __init__(self, n_heads: int, d_embed: int):
+#             super().__init__()
+#             self.attn = SelfAttention(n_heads=n_heads, d_embed=d_embed)
+#             self.bn = nn.BatchNorm2d(d_embed)  
+#             self.activation = nn.SiLU()
         
-        def forward(self, x):
-            residual = x
-            # NOTE: devo aggiungere positional encoding?
-            x = self.attn(x)
-            x = self.bn(x)
-            x =  self.activation(x)
-            out = x + residual
-            return out
+#         def forward(self, x):
+#             residual = x
+#             # NOTE: devo aggiungere positional encoding?
+#             x = self.attn(x)
+#             x = self.bn(x)
+#             x =  self.activation(x)
+#             out = x + residual
+#             return out
 
 class IGFE(nn.Module):
-    def __init__(self, in_channels: int=12, out_channels: int=512, n_heads: int=4):
+    def __init__(self, in_channels: int=12, out_channels: int=512):
         super().__init__()
         mid_channels = out_channels // 2  # NOTE: Qui potremmo cambiare e mettere un valore più piccolo/grande
         self.focus = FocusStructure()
         self.res1 = RESBLOCK(channels=in_channels)
-        self.attn1 = AttentionBlock(n_heads=n_heads, d_embed=in_channels)
+        # self.attn1 = AttentionBlock(n_heads=n_heads, d_embed=in_channels)
         self.res2 = RESBLOCK(channels=in_channels)
         self.ConvDown1 = ConvDownSampling(in_channels=in_channels, out_channels=mid_channels) 
         self.res3 = RESBLOCK(channels=mid_channels)
-        self.attn2 = AttentionBlock(n_heads=n_heads, d_embed=mid_channels)
+        # self.attn2 = AttentionBlock(n_heads=n_heads, d_embed=mid_channels)
         self.res4 = RESBLOCK(channels=mid_channels)
         self.ConvDown2 = ConvDownSampling(in_channels = mid_channels, out_channels=out_channels)
 
@@ -89,7 +96,6 @@ class IGFE(nn.Module):
         # (B, 12, H/2, W/2) -> (B, 12, H/2, W/2) 
         x = self.res1(x) 
         # (B, 12, H/2, W/2) -> (B, 12, H/2, W/2) 
-        x = self.attn1(x)
         # (B, 12, H/2, W/2) -> (B, 12, H/2, W/2)
         x = self.res2(x)
         # (B, 12, H/2, W/2) -> (B, 256, H/4, W/4)
@@ -97,7 +103,6 @@ class IGFE(nn.Module):
         # (B, 256, H/4, W/4) -> (B, 256, H/4, W/4)
         x = self.res3(x)
         # (B, 256, H/4, W/4) -> (B, 256, H/4, W/4)
-        x = self.attn2(x)
         # (B, 256, H/4, W/4) -> (B, 256, H/4, W/4)
         x = self.res4(x)
         # (B, 256, H/4, W/4) -> (B, 512, H/8, W/8)
@@ -116,7 +121,7 @@ class IGFE(nn.Module):
 #     print(f"Dimensione dell'input dummy: {dummy_input.shape}")
 
 #     igfe_model = IGFE()
-#     # print(f"Modello IGFE creato:\n{igfe_model}")
+#     print(f"Modello IGFE creato:\n{igfe_model}")
 #     total_params = sum(p.numel() for p in igfe_model.parameters() if p.requires_grad)
 #     print(f"\nNumero totale di parametri addestrabili: {total_params}")
 #     size_in_mb = total_params * 4 / 1024 / 1024  # 4 bytes per param (float32)
@@ -125,7 +130,7 @@ class IGFE(nn.Module):
 
 #     output_features = igfe_model(dummy_input)
 
-#     expected_output_shape = (batch_size, 512, 6, 18)
+#     expected_output_shape = (batch_size, 512, int(input_height/8), int(input_width/8))
 #     print(f"\nDimensione delle feature estratte dall'IGFE: {output_features.shape}")
 #     print(f"Dimensione attesa dell'output: {expected_output_shape}")
 

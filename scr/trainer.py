@@ -6,6 +6,7 @@ from torch.utils.data import DataLoader
 from tqdm import tqdm
 import numpy as np
 import random
+import time
 
 def set_seed(seed: int = 42):
     torch.manual_seed(seed)
@@ -43,12 +44,7 @@ def train(train_loader,
           lr_decay_factor=0.9,
           lr_decay_epochs=20):
 
-    # Se ci sono più GPU disponibili, usa DataParallel
-    if torch.cuda.is_available() and torch.cuda.device_count() > 1:
-        print(f"Usando {torch.cuda.device_count()} GPU con DataParallel")
-        model = nn.DataParallel(model)
     model = model.to(device)
-
     optimizer = optim.Adam(model.parameters(), lr=lr)
     blank_idx = char2idx['-']
     ctc_loss = nn.CTCLoss(blank=blank_idx, zero_infinity=True)
@@ -57,9 +53,11 @@ def train(train_loader,
     best_val_loss = float('inf')
     last_decay_epoch = 0
 
+    # Salvataggio delle perdite per ogni epoca
     train_losses = []
     val_losses = []
 
+    # Caricamento checkpoint se disponibile
     if load_checkpoint_path and os.path.isfile(load_checkpoint_path):
         checkpoint = torch.load(load_checkpoint_path, map_location=device)
         model.load_state_dict(checkpoint['weights'])
@@ -89,6 +87,9 @@ def train(train_loader,
             logits = model(images)  # (B, T, C)
             log_probs = logits.log_softmax(2).permute(1, 0, 2)  # (T, B, C)
             input_lengths = torch.full((batch_size,), log_probs.size(0), dtype=torch.long, device=device)
+            # print("Logits shape:", logits.shape)       # (B, 18, C)
+            # print("Log probs shape:", log_probs.shape) # (18, B, C)
+            # print("Input lengths:", input_lengths)     # [18, 18, ..., 18]
 
             loss = ctc_loss(log_probs, targets, input_lengths, target_lengths)
 
@@ -96,6 +97,7 @@ def train(train_loader,
             loss.backward()
             optimizer.step()
 
+            # Decode greedy per il training set
             with torch.no_grad():
                 pred_sequences = log_probs.permute(1, 0, 2).argmax(2)  # (B, T)
                 for pred, true_label in zip(pred_sequences, labels):
@@ -107,12 +109,14 @@ def train(train_loader,
 
             total_train_loss += loss.item()
             progress_bar.set_postfix(loss=loss.item())
+        
 
         avg_train_loss = total_train_loss / len(train_loader)
         train_losses.append(avg_train_loss)
         train_char_acc = character_accuracy(all_train_preds, all_train_targets)
         train_seq_acc = sequence_accuracy(all_train_preds, all_train_targets)
 
+        # Validazione
         model.eval()
         total_val_loss = 0
         all_preds, all_targets = [], []
@@ -133,6 +137,7 @@ def train(train_loader,
                 val_loss = ctc_loss(val_log_probs, val_targets, val_input_lengths, val_target_lengths)
                 total_val_loss += val_loss.item()
 
+                # Decode greedy
                 pred_sequences = val_log_probs.permute(1, 0, 2).argmax(2)  # (B, T)
                 for pred, true_label in zip(pred_sequences, val_labels):
                     pred = torch.unique_consecutive(pred, dim=0)
@@ -151,6 +156,7 @@ def train(train_loader,
               f"Train Loss: {avg_train_loss:.4f} | Train Char Acc: {train_char_acc:.4f} | Train Seq Acc: {train_seq_acc:.4f} | \n "
               f"Val Loss: {avg_val_loss:.4f} | Val Char Acc: {char_acc:.4f} | Val Seq Acc: {seq_acc:.4f}")
 
+        # Decay del learning rate
         if (epoch + 1) % lr_decay_epochs == 0:
             if avg_val_loss >= best_val_loss:
                 for group in optimizer.param_groups:
@@ -161,6 +167,7 @@ def train(train_loader,
             else:
                 best_val_loss = avg_val_loss
 
+        # Salvataggio checkpoint
         is_last_epoch = (epoch + 1 == start_epoch + num_epochs)
         if save_checkpoint_path and ((epoch + 1) % 5 == 0 or is_last_epoch):
             checkpoint = {
@@ -178,8 +185,10 @@ def train(train_loader,
     return model, train_losses, val_losses
 
 
+
+
 def evaluate_model(model, data_loader, char2idx, device='cuda'):
-    """Valuta il modello su un data_loader (es. test set)."""
+    """Valuta il modello su un data_loader (es. test set) e calcola gli FPS medi."""
     model.eval()
     blank_idx = char2idx['-']
     ctc_loss = nn.CTCLoss(blank=blank_idx, zero_infinity=True)
@@ -187,6 +196,9 @@ def evaluate_model(model, data_loader, char2idx, device='cuda'):
     total_loss = 0
     all_preds = []
     all_targets = []
+    total_images = 0
+
+    start_time = time.time()
 
     with torch.no_grad():
         for images, labels in data_loader:
@@ -194,6 +206,8 @@ def evaluate_model(model, data_loader, char2idx, device='cuda'):
             labels = labels.to(device)
 
             batch_size, seq_len = labels.shape
+            total_images += batch_size
+
             targets = labels.view(-1)
             target_lengths = torch.full((batch_size,), seq_len, dtype=torch.long, device=device)
 
@@ -213,9 +227,14 @@ def evaluate_model(model, data_loader, char2idx, device='cuda'):
                 all_preds.append(pred)
                 all_targets.append(target)
 
+    end_time = time.time()
+    elapsed_time = end_time - start_time
+    avg_fps = total_images / elapsed_time if elapsed_time > 0 else float('inf')
+
     avg_loss = total_loss / len(data_loader)
     char_acc = character_accuracy(all_preds, all_targets)
     seq_acc = sequence_accuracy(all_preds, all_targets)
 
-    print(f"Evaluation | Loss: {avg_loss:.4f} | Char Acc: {char_acc:.4f} | Seq Acc: {seq_acc:.4f}")
-    return avg_loss, char_acc, seq_acc
+    print(f"Evaluation | Loss: {avg_loss:.4f} | Char Acc: {char_acc:.4f} | Seq Acc: {seq_acc:.4f} | FPS: {avg_fps:.2f}")
+    return avg_loss, char_acc, seq_acc, avg_fps
+

@@ -19,9 +19,11 @@ class PDLPR(nn.Module):
             enc_unit=units,
             n_heads=n_heads)
 
-        # NOTE:  CNN BLOCK3 + CNN BLOCK4 danno un outout diverso da quello del paper
-        self.cnn3 = CNNBlock(d_embed, d_embed, kernel_size=(2, 1), stride=(3, 1), padding=(1, 0))
-        self.cnn4 = CNNBlock(d_embed, d_embed, kernel_size=(1, 2), stride=(1, 3), padding=(0,0))
+        # self.cnn3 = CNNBlock(d_embed, d_embed, kernel_size=(2, 1), stride=(3, 1), padding=(1, 0))
+        # self.cnn4 = CNNBlock(d_embed, d_embed, kernel_size=(1, 2), stride=(1, 3), padding=(0,0))
+        self.cnn3 = CNNBlock(d_embed, d_embed, kernel_size=(3, 1), stride=(3, 1), padding=(1, 0))
+        self.cnn4 = CNNBlock(d_embed, d_embed, kernel_size=(2, 1), stride=(1, 1), padding=(0,0))
+
 
         self.decoder = Decoder(
             height = height,
@@ -31,6 +33,10 @@ class PDLPR(nn.Module):
             dec_unit=units,
             n_heads=n_heads)
         
+        # NOTE: ho aggiunto questo
+        self.cnn5 = CNNBlock(d_embed, d_embed, kernel_size=(3, 1), stride=(3, 1), padding=(1, 0))
+        self.cnn6 = CNNBlock(d_embed, d_embed, kernel_size=(2, 1), stride=(1, 1), padding=(0,0))
+
         self.classifier = nn.Linear(d_embed, num_classes)
     
     def forward(self, x):
@@ -45,17 +51,25 @@ class PDLPR(nn.Module):
         # (B, 512, 6, 18) -> (B, 512, 3, 6) 
         conv_out = self.cnn4(self.cnn3(x)) # (B, 512, 3, 6)
 
+        # print("Output CNN3: ", self.cnn3(x).shape)
+        # print("Output CNN4: ", self.cnn4(self.cnn3(x)).shape)
         # (B, 512, 6, 18) -> (B, 512, 6, 18)
         x = self.decoder(x, conv_out)
         # print("Dec output: ", x.shape)
 
-        B, C, H, W = x.shape
-        # (B, 512, 6, 18) -> (B, 6, 18, 512) -> (B, 108, 512) 
-        x = x.permute(0, 2, 3, 1).reshape(B, H*W, C)
-        # (B, 108, 512)  ->  (B, 108, num_classes)
+        # (B, 512, 6, 18) -> (B, 512, 1, 18) 
+        # print("Output CNN5: ", self.cnn5(x).shape)
+        # print("Output CNN6: ", self.cnn6(self.cnn5(x)).shape)
+        x = self.cnn6(self.cnn5(x))
+        
+        #  (B, 512, 1, 18) -> (B, 512, 18) -> (B, 18, 512) 
+        x = x.squeeze(2).permute(0, 2, 1) 
+        # (B, 18, 512) -> (B, 18, 68)
         logits = self.classifier(x)
         # print("Logits shape: ", logits.shape)
-        return logits
+        return logits  # (B, 18, 68)
+
+
 
 
 if __name__ == "__main__":
@@ -77,7 +91,7 @@ if __name__ == "__main__":
 
     output_features = model(dummy_input)
 
-    expected_output_shape = (batch_size, 108, 68)
+    expected_output_shape = (batch_size, 18, 68)
     print(f"\nDimensione reali dell'output: {output_features.shape}")
     print(f"Dimensione attesa dell'output: {expected_output_shape}")
 

@@ -30,3 +30,5 @@ For evaluation, we tested on **8 subsets**, each with **1,000 images**, totaling
 
 We evaluated the fine-tuned model separately on each test subset using `val.py` from YOLOv5.
 The results are in "test_results" folder, each containg example of prediction and metric graphics.
+Also we computed other metrics such as: "Recall_IoU>0.7", "Precision_IoU>0.7", "Accuracy_img_IoU>0.7" (metric_iou0.7.csv).
+The fps is computed in the notebook yolov5, the value is ≈ 95 fps (all_imgs/all_seconds) using a P100 gpu on Kaggle environment.

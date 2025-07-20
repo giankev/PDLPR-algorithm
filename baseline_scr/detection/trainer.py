@@ -5,6 +5,17 @@ from torch.utils.data import DataLoader
 from pathlib import Path
 from tqdm import tqdm
 import math
+import random
+import numpy as np
+
+def set_seed(seed: int = 42):
+    random.seed(seed)
+    np.random.seed(seed)
+    torch.manual_seed(seed)
+    torch.cuda.manual_seed_all(seed)
+
+    torch.backends.cudnn.deterministic = True
+    torch.backends.cudnn.benchmark = False
 
 def train_one_epoch(model: nn.Module, data_loader, optimizer, device: str, epoch: int = 0):
     model.train()

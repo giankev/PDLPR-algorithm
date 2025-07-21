@@ -88,6 +88,10 @@ Six challenging sub-datasets of 1,000 samples were used for **evaluation**:
   -  CCPD-Weather 
   -  CCPD-Challenge 
 
+It is important to note that the distribution of Chinese characters in the CCPD dataset is highly imbalanced, with the character “皖” (representing Anhui province) appearing in approximately 95% of the samples, as suggested in the figure below.
+
+![Characters distribution](figures/first_char_hist.png)
+
 
 ## Data Augmentation
 To address the limited size of the training set and to improve generalization across challenging test sub-datasets, we applied extensive **data augmentation**. This helps prevent overfitting and enhances the model’s robustness to various real-world conditions.

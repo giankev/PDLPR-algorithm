@@ -161,11 +161,20 @@ The evaluation is divided into three parts:
 
 ## Checkpoints
 
-The trained model checkpoints for both the **PDLPR architecture** and the **baseline recognizer** are too large to be included directly in the repository. You can download them from [Google Drive](https://drive.google.com/drive/folders/1BcgfnjKgwZWvo-_ba3Pz2cMOwXfg_at8?usp=drive_link).
+You can find the trained model checkpoints in the `checkpoints/` folder. Due to their large size, the checkpoints for both the **PDLPR architecture** and the **baseline recognizer** are not included directly in this repository. Instead, you can download them from [Google Drive](https://drive.google.com/drive/folders/1BcgfnjKgwZWvo-_ba3Pz2cMOwXfg_at8?usp=drive_link).
 
 
 ## Results
 
+The table below summarizes the **sequence accuracy** of two license plate recognition methods: the baseline **CNN+LSTM** and **PDLPR**.
+
+
+| Method    | Overall | Base  | Blur  | Challenge | DB   | FN   | Rotate | Tilt | Weather | FPS   |
+|-----------|---------|-------|-------|-----------|------|------|--------|------|---------|---------|
+| CNN+LSTM  | 89.9    | 99.6  | 84.3  | 85.6      | 83.4 | 86.4 | 93.9   | <u>87.0</u> | <u>99.0</u>    | <u>552.65</u>  |
+| PDLPR     | <u>91.85</u>   | <u>99.8</u>  | <u>90.6</u>  | <u>89.6</u>      | <u>84.7</u> | <u>90.5</u> | <u>93.9</u>   | 86.9 | 98.8    | <u>311.49</u>  |
+
+In **recognition only**, PDLPR consistently outperforms CNN+LSTM in most categories, achieving a higher overall sequence accuracy (91.85% vs 89.9%). The biggest relative improvements by PDLPR are observed in Blur (90.6% vs 84.3%) and Challenge (89.6% vs 85.6%) conditions, indicating better robustness to difficult visual distortions. For Rotate accuracy, both methods perform equally well (93.9%), showing both are robust to rotation. CNN+LSTM slightly outperforms PDLPR on Tilt (87.0% vs 86.9%) and Weather (99.0% vs 98.8%), but the differences are marginal. CNN+LSTM achieves nearly double the FPS of PDLPR (552.65 vs 311.49), meaning CNN+LSTM processes frames much faster and is more suitable for real-time applications.
 
 
 ## References

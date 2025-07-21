@@ -125,8 +125,8 @@ The width dimension is treated as the temporal axis and fed to a 2-layer **Bidir
 
 [YOLOv5](https://github.com/ultralytics/yolov5) is a computer vision model developed by [Ultralytics](https://www.ultralytics.com/). We **fine-tuned** their pre-trained model using a two-phase training process:
 
-1. **Warm-up phase:** We trained the model for 5 epochs with the `--freeze` parameter set to 10, using an initial learning rate of 0.001.
-2. **Fine-tuning phase:** We then continued training for an additional 40 epochs, lowering the learning rate to 0.0005 and unfreezing the layers as needed.
+1. **Warm-up phase:** We trained the model for 10 epochs with specific initial hyperparameters. In this phase, data augmentation techniques such as mosaic and mixup were disabled to stabilize the initial learning.
+2. **Fine-tuning phase:** We then continued training for an additional 40 epochs. In this phase, we enabled mosaic data augmentation and introduced mixup to improve the model's ability to generalize. The weights for this phase were initialized from the results of the warm-up phase.
 
 
 

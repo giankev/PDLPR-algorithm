@@ -238,9 +238,9 @@ PDLPR-algorithm/
 └── README.md                    # Project overview and documentation
 ```
 
-## How to run
+# How to run
 
-# Training and Evaluation Notebooks
+## Training and Evaluation Notebooks
 Use the following notebooks to train and evaluate each component of the two architectures:
 
 - yolov5.ipynb — train and evaluate the YOLOv5 detector
@@ -251,21 +251,21 @@ Use the following notebooks to train and evaluate each component of the two arch
 
 - baseline-recognition.ipynb — train and evaluate the baseline recognizer (CNN + BiLSTM)
 
-# Inference and Full Pipeline Evaluation
+## Inference and Full Pipeline Evaluation
 Use the following notebooks to evaluate the full detection + recognition pipelines:
 
 - inference-yolov5-pdlpr.ipynb — evaluate the complete YOLOv5 + PDLPR architecture
 
 - inference-baseline.ipynb — evaluate the complete baseline architecture (ResNet-box + BiLSTM)
 
-# Script Dependencies
+## Script Dependencies
 Each notebook relies on Python scripts included in the repository.
 For example:
 
 The architecture for the baseline detector is defined in:
 baseline_src/detection/model.py
 
-# Running the Notebooks
+## Running the Notebooks
 To run any notebook:
 
 - Open it in Jupyter or Colab

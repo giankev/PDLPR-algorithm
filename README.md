@@ -243,20 +243,20 @@ PDLPR-algorithm/
 ## Training and Evaluation Notebooks
 Use the following notebooks to train and evaluate each component of the two architectures:
 
-- yolov5.ipynb — train and evaluate the YOLOv5 detector
+- `yolov5.ipynb` — train and evaluate the YOLOv5 detector
 
-- pdlpr-main.ipynb — train and evaluate the PDLPR recognizer (CTC-based)
+- `pdlpr-main.ipynb` — train and evaluate the PDLPR recognizer 
 
-- baseline-detection.ipynb — train and evaluate the baseline detector (ResNet18-box)
+- `baseline-detection.ipynb` — train and evaluate the baseline detector (ResNet18 + box-regressor)
 
-- baseline-recognition.ipynb — train and evaluate the baseline recognizer (CNN + BiLSTM)
+- `baseline-recognition.ipynb` — train and evaluate the baseline recognizer (CNN + BiLSTM)
 
 ## Inference and Full Pipeline Evaluation
 Use the following notebooks to evaluate the full detection + recognition pipelines:
 
-- inference-yolov5-pdlpr.ipynb — evaluate the complete YOLOv5 + PDLPR architecture
+- `inference-yolov5-pdlpr.ipynb` — evaluate the complete YOLOv5 + PDLPR architecture
 
-- inference-baseline.ipynb — evaluate the complete baseline architecture (ResNet-box + BiLSTM)
+- `inference-baseline.ipynb` — evaluate the complete baseline architecture (ResNet-box + BiLSTM)
 
 ## Script Dependencies
 Each notebook relies on Python scripts included in the repository.
